@@ -2,7 +2,6 @@ import lexkind
 from lexer import Lexer
 from core import Node, Error
 
-
 class _Parser:
     def __init__(self, lexer):
         self.lexer = lexer
@@ -10,9 +9,12 @@ class _Parser:
         self.is_tracking = False
         lexer.next() # precisamos popular lexer.word
 
+    def error(self, str):
+        return Error(str, self.lexer.word.range.copy())
+
     def consume(self):
         if self.lexer.word.kind == lexkind.INVALID:
-            return None, Error("invalid character")
+            return None, self.error("invalid character")
         out = self.lexer.word
         self.lexer.next()
         return Node(out), None;
@@ -72,7 +74,7 @@ def _mult(parser):
 def _unary(parser):
     parser.track("_unary")
     parent = None
-    if parser.is_kind(lexkind.NEG):
+    if parser.is_kind(lexkind.MINUS):
         parent, err = parser.consume()
         if err != None:
             return None, err
@@ -90,18 +92,18 @@ def _term(parser):
     parser.track("_term")
     if parser.is_kind(lexkind.NUM):
         return parser.consume()
-    elif parser.is_kind(lexkind.LEFTPAREN):
+    elif parser.is_kind(lexkind.LEFT_PAREN):
         return _nestedExpr(parser)
     else:
-        return None, Error("unexpected token in term")
+        return None, parser.error("unexpected token in term")
 
 def _nestedExpr(parser):
     parser.track("_nestedExpr")
     _discard, err = parser.consume()
     if err != None:
         return None, err
-    if _discard.value.kind != lexkind.LEFTPAREN:
-        return None, Error("bad use of _nestedExpr")
+    if _discard.value.kind != lexkind.LEFT_PAREN:
+        return None, parser.error("bad use of _nestedExpr")
 
     exp, err = _expr(parser)
     if err != None:
@@ -110,8 +112,8 @@ def _nestedExpr(parser):
     _discard, err = parser.consume()
     if err != None:
         return None, err
-    if _discard.value.kind != lexkind.RIGHTPAREN:
-        return None, Error("expected closing parenthesis in expression")
+    if _discard.value.kind != lexkind.RIGHT_PAREN:
+        return None, parser.error("expected closing parenthesis in expression")
 
     return exp, None
 

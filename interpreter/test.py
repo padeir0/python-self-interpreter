@@ -1,4 +1,5 @@
 import lexkind
+from lexer import Lexer
 from parser import parse
 from evaluator import evaluate
 
@@ -10,10 +11,10 @@ def test(str, result):
     print(n)
     return evaluate(n) == result
 
-if __name__ == "__main__":
+def arith_tests():
     tests = [
         ("1+2", 3), ("3*5", 15), ("1+2*5", 11),
-        ("1+10/2", 6), ("3*~5", -15), ("(5*5)/5", 5),
+        ("1+10/2", 6), ("3*-5", -15), ("(5*5)/5", 5),
     ]
     
     for t in tests:
@@ -22,3 +23,19 @@ if __name__ == "__main__":
             print(t[0], "OK!")
         else:
             print(t[0], "FAIL!")
+
+def lexy():
+    tests = [
+        "def max(a, b):",
+        "\"stringy\" is nice ok: (1 >= 2 == 3 += 4)"
+    ]
+    for s in tests:
+        l = Lexer(s)
+        for tk in l.all_tokens():
+            print(tk)
+
+
+if __name__ == "__main__":
+    arith_tests()
+    lexy()
+
