@@ -70,6 +70,7 @@ class Lexer:
         self.start = self.end
         self.range.start = self.range.end.copy()
 
+    # TODO: incluir comentários aqui
     def _ignore_whitespace(self):
         r = self._peek_rune()
         while r == " ":

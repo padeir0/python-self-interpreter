@@ -1,4 +1,5 @@
 import lexkind
+import nodekind
 
 # esse arquivo contém as principais estruturas de dados
 # e suas funções utilitárias
@@ -36,13 +37,16 @@ class Lexeme:
         self.range = range
     def __str__(self):
         return "('" + self.text + "', " + lexkind.to_string(self.kind) + ")"
+    def start_column(self):
+        return self.range.start.column
     def copy(self):
         return Lexeme(self.string, self.kind, self.range.copy())
 
 # value precisa ser um Lexeme
 class Node:
-    def __init__(self, value):
+    def __init__(self, value, kind):
         self.value = value
+        self.node_kind = kind
         self.leaves = []
         self.range = value.range
 

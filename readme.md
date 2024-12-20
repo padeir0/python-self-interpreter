@@ -27,7 +27,7 @@ Pass = 'pass'.
 
 Import = 'import' IdList.
 FromImport = 'from' id 'import' IdList.
-IdList = id {',' id}.
+IdList = id {',' id} [','].
 
 While = 'while' Expr ':' NL >Block.
 
@@ -37,17 +37,20 @@ Else = 'else' ':' NL >Block.
 
 For = 'for' id 'in' Expr ':' NL >Block.
 Atrib_Expr = Expr [Assign_Op Expr].
+
 Return = 'return' ExprList.
 
 Class = 'class' id ':' NL >Methods.
 Methods = {Func}.
 
-Func = 'def' id '(' ArgList ')' ':' NL >Block.
-ArgList = Arg {',' Arg}.
+Func = 'def' id '(' [NL] ArgList ')' ':' NL >Block.
+ArgList = Arg {CommaNL Arg} [CommaNL].
 Arg = 'self' | id.
 
-MultiLine_ExprList = Expr {',' [NL] Expr} [','].
-ExprList = Expr {',' Expr}.
+MultiLine_ExprList = Expr {CommaNL Expr} [CommaNL].
+CommaNL = ',' [NL].
+
+ExprList = Expr {',' Expr} [','].
 Expr = And {'or' And}.
 And = Comp {'and' Comp}.
 Comp = Sum {compOp Sum}.
@@ -69,12 +72,13 @@ Suffix = Call
 Call = '(' [MultiLine_ExprList] ')'.
 Index = '[' Expr [':' Expr] ']'.
 DotAccess = '.' id.
-List = '[' MultiLine_ExprList ']'.
-Dict = '{' AtribList '}'.
+List = '[' [NL] MultiLine_ExprList ']'.
+Dict = '{' [NL] KeyValue_List '}'.
 
-AtribList = Atrib_Expr {',' [NL] Atrib_Expr}.
-Atrib_Expr = Expr [':' Expr].
-NestedExpr_Tuple = '(' MultiLine_ExprList ')'.
+KeyValue_List = KeyValue_Expr {CommaNL KeyValue_Expr} [CommaNL].
+KeyValue_Expr = Expr [':' Expr].
+
+NestedExpr_Tuple = '(' [NL] MultiLine_ExprList ')'.
 
 Assign_Op = '=' | '+=' | '-=' | '*=' | '/=' | '%='.
 
@@ -98,6 +102,13 @@ Coisas especiais:
 ser ignorados, isso inclui espaço e comentários.
  - o uso de `>` representa uma indentação obrigatória,
 inspirado pelo artigo [_Indentation-Sensitive Parsing for Parsec_](https://osa1.net/papers/indentation-sensitive-parsec.pdf).
+
+Para ser mais preciso, as produções precedidas por `>` tem
+de enforçar que o primeiro token de cada produção sejam justificados,
+ie, estejam na mesma indentação, e, ao mesmo tempo, 
+o operador aumenta o nivel de indentação baseado no primeiro
+token da produção que o contém (eu ainda não to feliz com
+essa definição, mas vai ter que dar pro gasto).
 
 ## Ideia geral
 
