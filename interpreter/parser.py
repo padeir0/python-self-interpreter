@@ -42,7 +42,7 @@ class _Parser:
         return last, None
 
     def start_tracking(self):
-        self.is_tracking = true
+        self.is_tracking = True
 
     def track(self, str):
         if self.is_tracking:

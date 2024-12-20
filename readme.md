@@ -8,7 +8,7 @@ o próprio código.
 
 O subconjunto de Python em questão é o descrito
 pela gramatica PEG extendida a seguir. Que tal
-subconjunto seja nomeado _spy_, por *S*ubset of *Py*thon.
+subconjunto seja nomeado _spy_, vindo de **S**ubset of **Py**thon.
 
 ```ebnf
 WhiteSpace = ' ' | '\r' | Comment.
@@ -42,7 +42,7 @@ Return = 'return' ExprList.
 Class = 'class' id ':' NL >Methods.
 Methods = {Func}.
 
-Func = 'def' id '[' ArgList ']' ':' NL >Block.
+Func = 'def' id '(' ArgList ')' ':' NL >Block.
 ArgList = Arg {',' Arg}.
 Arg = 'self' | id.
 
