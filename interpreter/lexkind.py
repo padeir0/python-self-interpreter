@@ -48,8 +48,8 @@ LEFT_PAREN = 37
 RIGHT_PAREN = 38
 LEFT_BRACKET = 39
 RIGHT_BRACKET = 40
-LEFT_BRACES = 41
-RIGHT_BRACES = 42
+LEFT_BRACE = 41
+RIGHT_BRACE = 42
 
 COLON = 43
 COMMA = 44
@@ -155,10 +155,10 @@ def to_string(kind):
         return "LEFT_BRACKET"
     elif kind == RIGHT_BRACKET:
         return "RIGHT_BRACKET"
-    elif kind == LEFT_BRACES:
-        return "LEFT_BRACES"
-    elif kind == RIGHT_BRACES:
-        return "RIGHT_BRACES"
+    elif kind == LEFT_BRACE:
+        return "LEFT_BRACE"
+    elif kind == RIGHT_BRACE:
+        return "RIGHT_BRACE"
 
     elif kind == COLON:
         return "COLON"

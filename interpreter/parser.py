@@ -509,7 +509,7 @@ def _pass(parser):
 # Func = 'def' id Arguments ':' NL >Block.
 def _func(parser):
     parser.track("_func")
-    kw, err = parser.expect(lexkind.def, "'def' keyword")
+    kw, err = parser.expect(lexkind.DEF, "'def' keyword")
     if err != None:
         return None, err
     id, err = parser.expect(lexkind.ID, "identifier")
@@ -613,7 +613,7 @@ def _unary_prefix(parser):
         while i < len(list):
             if i+1 < len(list):
                 list[i].add_leaf(list[i+1])
-            i++
+            i+=1
 
     other, err = _unary_suffix(parser)
     if err != None:
@@ -658,7 +658,7 @@ def _unary_suffix(parser):
         while 0 < i:
             if 0 < i-1:
                 list[i-1].add_leaf(list[i])
-            i--
+            i-=1
         if len(list) > 0:
             first = list[0]
             last = list[len(list)-1]
@@ -672,13 +672,13 @@ def _unary_suffix(parser):
 #        | Dict | List.
 def _term(parser):
     parser.track("_term")
-    if parser.is_kinds(lexkind.SELF,
-                       lexkind.NONE,
-                       lexkind.TRUE,
-                       lexkind.FALSE,
-                       lexkind.ID,
-                       lexkind.STR,
-                       lexkind.NUM):
+    if parser.is_kinds([lexkind.SELF,
+                        lexkind.NONE,
+                        lexkind.TRUE,
+                        lexkind.FALSE,
+                        lexkind.ID,
+                        lexkind.STR,
+                        lexkind.NUM]):
         return parser.consume()
     elif parser.is_kind(lexkind.LEFT_BRACKET):
         return _nested_expr_tuple(parser)
@@ -691,7 +691,7 @@ def _term(parser):
 
 # Dict = '{' [NL] KeyValue_List '}'.
 def _dict(parser):
-    _, err = parser.expect(lexkind.LEFT_BRACE, "left braces '{'")
+    _, err = parser.expect(lexkind.LEFT_BRACE, "left brace '{'")
     if err != None:
         return None, err
     if parser.is_kind(lexkind.NEWLINE):
@@ -701,7 +701,7 @@ def _dict(parser):
     kvlist, err = _keyvalue_list(parser)
     if err != None:
         return None, err
-    _, err = parser.expect(lexkind.RIGHT_BRACE, "right braces '}'")
+    _, err = parser.expect(lexkind.RIGHT_BRACE, "right brace '}'")
     if err != None:
         return None, err
     n = Node(None, nodekind.DICT)
@@ -764,7 +764,7 @@ def _comp_op(parser):
     return parser.is_kinds(kinds)
 
 def _and_op(parser):
-    return parser.is_kinds([lexkind.and])
+    return parser.is_kinds([lexkind.AND])
 
 def _or_op(parser):
     return parser.is_kinds([lexkind.OR])

@@ -141,10 +141,10 @@ class Lexer:
             return self._emit(lexkind.RIGHT_BRACKET)
         elif r == "{":
             self._next_rune()
-            return self._emit(lexkind.LEFT_BRACES)
+            return self._emit(lexkind.LEFT_BRACE)
         elif r == "}":
             self._next_rune()
-            return self._emit(lexkind.RIGHT_BRACES)
+            return self._emit(lexkind.RIGHT_BRACE)
         elif r == ":":
             self._next_rune()
             return self._emit(lexkind.COLON)
