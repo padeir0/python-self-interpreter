@@ -43,7 +43,8 @@ Return = 'return' ExprList.
 Class = 'class' id ':' NL >Methods.
 Methods = {Func}.
 
-Func = 'def' id '(' [NL] ArgList ')' ':' NL >Block.
+Func = 'def' id Arguments ':' NL >Block.
+Arguments = '(' [NL] [ArgList] ')'.
 ArgList = Arg {CommaNL Arg} [CommaNL].
 Arg = 'self' | id.
 

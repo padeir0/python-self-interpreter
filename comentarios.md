@@ -75,7 +75,7 @@ Nesse caso, a produção `Block`, além das regras usuais,
 compreende somente os tokens que estão no mesmo nivel de identação,
 no parser, isso pode ser implementado simplesmente como:
 
-```
+```python
 def block(parser):
     while (parser.same_identation()):
         # decision rules ...
@@ -96,3 +96,26 @@ Só é necessário que os statements em um bloco
 sejam corretamente justificados (tenham a mesma indentação),
 e que, quando ditado pela gramática, o primeiro statement
 do bloco tenha uma indentação estritamente maior que a anterior.
+
+# Tratamento de erros
+
+Para tratar os erros no parser, existem varias opções.
+Idealmente, em python, usariamos `Exception`, o que limparia
+muito a implementação, entretanto, isso acarretaria na
+necessidade de implementar `Exception`, que pode dar dor de
+cabeça.
+
+Ao invés disso, tomamos a estratégia de Go:
+
+```python
+def _while(parser):
+    kw, err = parser.expect(lexkind.WHILE, "while keyword")
+    if err != None:
+        return None, err
+```
+
+Poderiamos, pela natureza dinamica de Python, retornar um único
+valor, mas precisariamos implementar `type()` e `is`,
+então deixaremos do jeito que está.
+
+Se sobrar tempo, eu implemento uma das duas alternativas acima.
