@@ -59,6 +59,7 @@ class _Parser:
             parent, err = self.consume()
             if err != None:
                 return None, err
+            parent.kind = nodekind.OPERATOR
             parent.addLeaf(last)
 
             newLeaf, err = production(self)
@@ -147,7 +148,7 @@ class _Parser:
         column = self.lexer.word.start_column()
         return column > self.indent
 
-# Block = { Statement NL }.
+# Block = { [Statement] NL }.
 # Statement = While  | If    | For | Atrib_Expr
 #           | Return | Class | Func
 #           | Import | FromImport | Pass.
@@ -176,15 +177,38 @@ def _block(parser):
         elif parser.is_kind(lexkind.DEF):
             n, err = _func(parser)
         else:
-            n, err = _expr(parser)
-            if n == None:
-                return None, parser.Error("expected a statement")
+            n, err = _atrib_expr(parser)
         if err != None:
             return None, err
-        statements += [n]
+        if n != None:
+            statements += [n]
     block = Node(None, nodekind.BLOCK)
     block.leaves = statements
     return block, None
+
+# Atrib_Expr = Expr [Assign_Op Expr].
+def _atrib_expr(parser):
+    exp, err = _expr(parser)
+    if err != None:
+        return None, err
+    if exp == None:
+        return None, None
+    if parser.is_kinds([lexkind.ASSIGN,
+                        lexkind.ASSIGN_PLUS,
+                        lexkind.ASSIGN_MINUS,
+                        lexkind.ASSIGN_MULT,
+                        lexkind.ASSIGN_DIV,
+                        lexkind.ASSIGN_REM]):
+        op, err = parser.consume()
+        if err != None:
+            return None, err
+        exp2, err = parser.expect_prod(_expr, "expression")
+        if err != None:
+            return None, err
+        op.kind = nodekind.OPERATOR
+        op.leaves = [exp, exp2]
+        return op, None
+    return exp, None
 
 # While = 'while' Expr ':' NL >Block.
 def _while(parser):
@@ -302,7 +326,6 @@ def _else(parser):
     return n, None
 
 # For = 'for' id 'in' Expr ':' NL >Block.
-# Atrib_Expr = Expr [Assign_Op Expr].
 def _for(parser):
     parser.track("_for")
     kw, err = parser.expect(lexkind.FOR, "'for' keyword")
