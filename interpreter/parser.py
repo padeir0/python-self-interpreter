@@ -7,7 +7,7 @@ def parse(string, track):
     parser = _Parser(Lexer(string))
     if track:
         parser.start_tracking()
-    parser.track("Parse")
+    parser.track("parser.parse")
     return _block(parser)
 
 class _Parser:
@@ -25,7 +25,7 @@ class _Parser:
             return None, self.error("invalid character")
         out = self.lexer.word
         self.lexer.next()
-        return Node(out, nodekind.TERMINAL), None;
+        return Node(out, nodekind.TERMINAL), None
 
     def expect(self, kind, str):
         if self.is_kind(kind):
@@ -184,12 +184,13 @@ def _block(parser):
             return None, err
 
         if parser.is_kind(lexkind.NL):
-            _, err = parser.consume()
+            _, err = _NL(parser)
             if err != None:
                 return None, err
 
         if n != None:
             statements += [n]
+    print(base_indent, parser.curr_indent(), parser.lexer.word)
 
     block = Node(None, nodekind.BLOCK)
     block.leaves = statements
@@ -197,6 +198,7 @@ def _block(parser):
 
 # Atrib_Expr = ExprList [Assign_Op Expr].
 def _atrib_expr(parser):
+    parser.track("_atrib_expr")
     lhs, err = _expr_list(parser)
     if err != None:
         return None, err
@@ -206,7 +208,7 @@ def _atrib_expr(parser):
         op, err = parser.consume()
         if err != None:
             return None, err
-        rhs, err = parser.expect_prod(_expr, "expression")
+        rhs, err = parser.expect_prod(_expr, "expression on right hand side")
         if err != None:
             return None, err
         if len(lhs.leaves) > 1:
@@ -288,13 +290,17 @@ def _if(parser):
     _the_elifs, err = parser.repeat(_elif)
     if err != None:
         return None, err
+    elifs = None
+    if _the_elifs != None:
+        elifs = Node(None, nodekind.ELIF_LIST)
+        elifs.leaves = _the_elifs
 
     _the_else, err = _else(parser)
     if err != None:
         return None, err
 
     n = Node(None, nodekind.IF)
-    n.leaves = [exp, block, _the_elifs, _the_else]
+    n.leaves = [exp, block, elifs, _the_else]
     return n, None
 
 # Elif = 'elif' Expr ':' NL >Block.
@@ -336,6 +342,10 @@ def _else(parser):
     if err != None:
         return None, err
     _, err = parser.expect(lexkind.COLON, "a colon ':'")
+    if err != None:
+        return None, err
+
+    _, err = _NL(parser)
     if err != None:
         return None, err
 
@@ -462,9 +472,9 @@ def _from(parser):
     if err != None:
         return None, err
 
-    n = Node(None, nodelist.FROM_IMPORT)
+    n = Node(None, nodekind.FROM_IMPORT)
     n.leaves = [id, idlist]
-    return n
+    return n, None
 
 # Import = 'import' IdList.
 def _import(parser):
@@ -477,9 +487,9 @@ def _import(parser):
     if err != None:
         return None, err
 
-    n = Node(None, nodelist.IMPORT)
+    n = Node(None, nodekind.IMPORT)
     n.leaves = [idlist]
-    return n
+    return n, None
 
 # Class = 'class' id ':' NL >Methods.
 def _class(parser):
@@ -522,6 +532,10 @@ def _methods(parser):
         f, err = _func(parser)
         if err != None:
             return None, err
+        if parser.is_kind(lexkind.NL):
+            _, err = _NL(parser)
+            if err != None:
+                return None, err
         methods += [f]
 
     n = Node(None, nodekind.METHODS)

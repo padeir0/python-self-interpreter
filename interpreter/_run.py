@@ -3,10 +3,47 @@ from parser import parse
 import os
 import sys
 
+def extract_offense(range, program):
+    p_line_start = None
+    p_index_start = 0
+    p_line_end = None
+    p_index_end = 0
+    
+    lines = 0
+    columns = 0
+    index = 0
+
+    for c in program:
+        index += 1
+        columns += 1
+        if c == "\n":
+            lines += 1
+            columns = 0
+
+        if lines == range.start.line and p_line_start == None:
+            p_line_start = index
+        if lines == range.end.line:
+            p_line_end = index
+
+        if lines == range.start.line and columns == range.start.column:
+            p_index_start = index
+        if lines == range.end.line and columns == range.end.column:
+            p_index_end = index
+
+    offense = program[p_line_start:p_index_start]
+    offense += "\033[0;31m"
+    offense += program[p_index_start:p_index_end]
+    offense += "\033[0m"
+    offense += program[p_index_end:p_line_end]
+
+    return offense
+
 def do_the_thing(dict, modname):
-    root, err = parse(dict[modname], False)
+    input = dict[modname]
+    root, err = parse(input, True)
     if err != None:
         print(err)
+        print("\t" + extract_offense(err.range, input))
     else:
         print("")
         print(root)

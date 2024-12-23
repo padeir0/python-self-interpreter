@@ -13,6 +13,12 @@ class Position:
         return Position(self.line, self.column)
     def __str__(self):
         return str(self.line) + ":" + str(self.column)
+    def correct_editor_view(self):
+        # no lexer a gente começa na linha 0, coluna 0,
+        # mas no editor, nós vémos tudo começando da linha 1,
+        # coluna 1
+        self.line += 1
+        self.column += 1
 
 # representa uma seção continua do código fonte
 # start e end tem que ser da classe Position
@@ -24,6 +30,9 @@ class Range:
         return Range(self.start.copy(), self.end.copy())
     def __str__(self):
         return self.start.__str__() + " to " + self.end.__str__()
+    def correct_editor_view(self):
+        self.start.correct_editor_view()
+        self.end.correct_editor_view()
 
 class Error:
     def __init__(self, string, range):
@@ -33,6 +42,8 @@ class Error:
         return "error " + self.range.__str__() + ": "+ self.message
     def copy(self):
         return Error(self.string, self.range.copy())
+    def correct_editor_view(self):
+        self.range.correct_editor_view()
 
 class Lexeme:
     def __init__(self, string, kind, range):

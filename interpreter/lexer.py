@@ -7,7 +7,10 @@ def _is_alpha(s):
 def _is_digit(s):
     return s >= "0" and s <= "9"
 
-def _is_identifier(s):
+def _is_ident_start(s):
+    return _is_alpha(s) or s == "_"
+
+def _is_ident(s):
     return _is_alpha(s) or _is_digit(s) or s == "_"
 
 class Lexer:
@@ -15,8 +18,7 @@ class Lexer:
         self.string = string
         self.start = 0
         self.end = 0
-        # começa na linha 1 pra ficar igual no editor de texto
-        self.range = Range(Position(1, 0), Position(1, 0))
+        self.range = Range(Position(0, 0), Position(0, 0))
         self.word = None
         self.peeked = None
 
@@ -71,12 +73,22 @@ class Lexer:
         self.start = self.end
         self.range.start = self.range.end.copy()
 
-    # TODO: incluir comentários aqui
     def _ignore_whitespace(self):
         r = self._peek_rune()
-        while r == " ":
-            self._next_rune()
+        loop = True
+        while loop:
+            if r == " ":
+                self._next_rune()
+            elif r == "#": # comment
+                self._next_rune()
+                r = self._peek_rune()
+                while r != "\n" and r != "":
+                    self._next_rune()
+                    r = self._peek_rune()
+            else:
+                loop = False
             r = self._peek_rune()
+                
         self._advance()
 
     def _any(self):
@@ -84,7 +96,7 @@ class Lexer:
         r = self._peek_rune()
         if _is_digit(r):
             return self._number()
-        elif _is_alpha(r):
+        elif _is_ident_start(r):
             return self._identifier()
         elif r == "\"":
             return self._string()
@@ -205,7 +217,7 @@ class Lexer:
 
     def _identifier(self):
         r = self._peek_rune()
-        while _is_identifier(r):
+        while _is_ident(r):
             self._next_rune()
             r = self._peek_rune()
 

@@ -27,6 +27,7 @@ LIST = 24
 DICT = 25
 INDEX = 26
 KEY_VALUE_PAIR = 27
+ELIF_LIST = 28
 
 def to_str(kind):
     if kind == INVALID: 
@@ -87,5 +88,7 @@ def to_str(kind):
         return "INDEX"
     elif kind == KEY_VALUE_PAIR:
         return "KEY_VALUE_PAIR"
+    elif kind == ELIF_LIST:
+        return "ELIF_LIST"
     else:
         return "???"
