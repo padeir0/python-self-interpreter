@@ -119,3 +119,20 @@ valor, mas precisariamos implementar `type()` e `is`,
 então deixaremos do jeito que está.
 
 Se sobrar tempo, eu implemento uma das duas alternativas acima.
+
+# Atribuições
+
+O lado esquerdo de uma atribuição deve conter apenas expressões atribuíveis.
+Nesse sentido, essa validação só pode ocorrer em tempo de runtime.
+Para isso, uma função `get_target_object` pode olhar a expressão do lado
+esquerdo e tentar achar o objeto, e ela mesmo retorna esse erro, caso ocorra.
+
+A definição de uma **expressão atribuível** em _psy_ se dá pelo seguinte:
+ - Se `<e>` é uma variável, mesmo que não declarada previamente, então `<e>` é atribuível (`a = 1`).
+ - Sendo `<e>` uma expressão atribuível, uma expressão composta com indexação (`<e>[1] = 1`) é atribuivel
+ - Sendo `<e>` uma expressão atribuível, uma expressão composta com acesso a uma _propriedade mutavel_ `<e>.prop = 1` é atribuível
+
+Uma propriedade é **mutavel** se não é o nome de algum método.
+
+Note que isso pode ser checado facilmente com um procedimento recursivo,
+mesmo no caso que o lado esquerdo da atribuição tenha multiplas expressões.

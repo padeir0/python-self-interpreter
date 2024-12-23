@@ -4,10 +4,11 @@ import os
 import sys
 
 def do_the_thing(dict, modname):
-    root, err = parse(dict[modname], True)
+    root, err = parse(dict[modname], False)
     if err != None:
         print(err)
     else:
+        print("")
         print(root)
 
 def get_python_files(directory_path):

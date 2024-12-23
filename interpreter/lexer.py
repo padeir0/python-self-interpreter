@@ -15,7 +15,8 @@ class Lexer:
         self.string = string
         self.start = 0
         self.end = 0
-        self.range = Range(Position(0, 0), Position(0, 0))
+        # começa na linha 1 pra ficar igual no editor de texto
+        self.range = Range(Position(1, 0), Position(1, 0))
         self.word = None
         self.peeked = None
 

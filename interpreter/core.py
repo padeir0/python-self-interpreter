@@ -11,6 +11,8 @@ class Position:
         self.column = column
     def copy(self):
         return Position(self.line, self.column)
+    def __str__(self):
+        return str(self.line) + ":" + str(self.column)
 
 # representa uma seção continua do código fonte
 # start e end tem que ser da classe Position
@@ -20,13 +22,15 @@ class Range:
         self.end = pos_end
     def copy(self):
         return Range(self.start.copy(), self.end.copy())
+    def __str__(self):
+        return self.start.__str__() + " to " + self.end.__str__()
 
 class Error:
     def __init__(self, string, range):
         self.message = string
         self.range = range
     def __str__(self):
-        return "error:" + self.message
+        return "error " + self.range.__str__() + ": "+ self.message
     def copy(self):
         return Error(self.string, self.range.copy())
 
@@ -46,11 +50,11 @@ class Lexeme:
 class Node:
     def __init__(self, value, kind):
         self.value = value
-        self.node_kind = kind
+        self.kind = kind
         self.leaves = []
-        self.range = value.range
+        self.range = None
 
-    def addLeaf(self, leaf):
+    def add_leaf(self, leaf):
         self.leaves += [leaf];
 
     def left(self):
@@ -59,7 +63,16 @@ class Node:
         return self.leaves[1]
 
     def compute_range(self):
-        pass
+        if self.kind == nodekind.TERMINAL:
+            self.range = self.value.range.copy()
+            return;
+        self.range = Range(Position(0, 0), Position(0, 0))
+        for leaf in self.leaves:
+            leaf.compute_range()
+            if leaf.range.start.less(self.range.start):
+                self.range.start = leaf.range.start.copy()
+            if leaf.range.end.more(self.range.end):
+                self.range.end = leaf.range.end.copy()
 
     def __str__(self):
         return _print_tree(self, 0)
@@ -73,7 +86,14 @@ class Node:
         return n
 
 def _print_tree(node, depth):
-    out = _indent(depth) + node.value.__str__()
+    if node == None:
+        return _indent(depth) + "nil\n"
+
+    out = _indent(depth) + nodekind.to_str(node.kind)
+    if node.kind in [nodekind.TERMINAL, nodekind.OPERATOR]:
+        out += " " + node.value.__str__()
+    out += "\n"
+
     for n in node.leaves:
         out += _print_tree(n, depth+1)
     return out

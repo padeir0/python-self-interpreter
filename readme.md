@@ -68,10 +68,10 @@ Term = 'self' | 'None' | bool | num
 
 prefix = 'not' | '-'.
 Suffix = Call
-    | DotAccess
-    | Index.
-Call = '(' [MultiLine_ExprList] ')'.
-Index = '[' Expr [':' Expr] ']'.
+       | DotAccess
+       | Index.
+Call = '(' [NL] [MultiLine_ExprList] ')'.
+Index = '[' [NL] Expr [':' Expr] ']'.
 DotAccess = '.' id.
 List = '[' [NL] MultiLine_ExprList ']'.
 Dict = '{' [NL] KeyValue_List '}'.

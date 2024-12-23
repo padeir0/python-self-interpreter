@@ -8,12 +8,12 @@ def parse(string, track):
     if track:
         parser.start_tracking()
     parser.track("Parse")
-    return _expr(parser)
+    return _block(parser)
 
 class _Parser:
     def __init__(self, lexer):
         self.lexer = lexer
-        self.indent = 0 # numero de espaços
+        self.indent = -1 # numero de espaços, começa em -1 por gambiarra
         self.is_tracking = False
         lexer.next() # precisamos popular lexer.word
 
@@ -60,12 +60,12 @@ class _Parser:
             if err != None:
                 return None, err
             parent.kind = nodekind.OPERATOR
-            parent.addLeaf(last)
+            parent.add_leaf(last)
 
             newLeaf, err = production(self)
             if err != None:
                 return None, err
-            parent.addLeaf(newLeaf)
+            parent.add_leaf(newLeaf)
             last = parent
         return last, None
 
@@ -140,13 +140,11 @@ class _Parser:
     def is_kind(self, kind):
         return self.lexer.word.kind == kind
 
-    def same_indent(self):
-        column = self.lexer.word.start_column()
-        return column == self.indent
+    def curr_indent(self):
+        return self.lexer.word.start_column()
 
     def strict_indent(self):
-        column = self.lexer.word.start_column()
-        return column > self.indent
+        return self.curr_indent() > self.indent
 
 # Block = { [Statement] NL }.
 # Statement = While  | If    | For | Atrib_Expr
@@ -155,7 +153,11 @@ class _Parser:
 def _block(parser):
     parser.track("_block")
     statements = []
-    while parser.same_indent():
+    if not parser.strict_indent():
+        return None, parser.error("invalid indentation")
+
+    base_indent = parser.curr_indent()
+    while base_indent == parser.curr_indent() and not parser.is_kind(lexkind.EOF):
         n = None
         err = None
         if parser.is_kind(lexkind.WHILE):
@@ -180,35 +182,58 @@ def _block(parser):
             n, err = _atrib_expr(parser)
         if err != None:
             return None, err
+
+        if parser.is_kind(lexkind.NL):
+            _, err = parser.consume()
+            if err != None:
+                return None, err
+
         if n != None:
             statements += [n]
+
     block = Node(None, nodekind.BLOCK)
     block.leaves = statements
     return block, None
 
-# Atrib_Expr = Expr [Assign_Op Expr].
+# Atrib_Expr = ExprList [Assign_Op Expr].
 def _atrib_expr(parser):
-    exp, err = _expr(parser)
+    lhs, err = _expr_list(parser)
     if err != None:
         return None, err
-    if exp == None:
+    if lhs == None:
         return None, None
-    if parser.is_kinds([lexkind.ASSIGN,
-                        lexkind.ASSIGN_PLUS,
-                        lexkind.ASSIGN_MINUS,
-                        lexkind.ASSIGN_MULT,
-                        lexkind.ASSIGN_DIV,
-                        lexkind.ASSIGN_REM]):
+    if parser.is_kind(lexkind.ASSIGN):
         op, err = parser.consume()
         if err != None:
             return None, err
-        exp2, err = parser.expect_prod(_expr, "expression")
+        rhs, err = parser.expect_prod(_expr, "expression")
         if err != None:
             return None, err
-        op.kind = nodekind.OPERATOR
-        op.leaves = [exp, exp2]
+        if len(lhs.leaves) > 1:
+            op.kind = nodekind.MULTI_ASSIGN
+            op.leaves = [lhs, rhs]
+        else:
+            op.kind = nodekind.ASSIGN
+            op.leaves = [lhs.leaves[0], rhs]
         return op, None
-    return exp, None
+    elif parser.is_kinds([lexkind.ASSIGN_PLUS,
+                          lexkind.ASSIGN_MINUS,
+                          lexkind.ASSIGN_MULT,
+                          lexkind.ASSIGN_DIV,
+                          lexkind.ASSIGN_REM]):
+        op, err = parser.consume()
+        if err != None:
+            return None, err
+        rhs, err = parser.expect_prod(_expr, "expression")
+        if err != None:
+            return None, err
+        if len(lhs.leaves) > 1:
+            lhs.compute_range()
+            return None, Error("illegal expression for augmented assignment", lhs.range.copy())
+        op.kind = nodekind.AUGMENTED_ASSIGN
+        op.leaves = [lhs, rhs]
+        return op, None
+    return lhs, None
 
 # While = 'while' Expr ':' NL >Block.
 def _while(parser):
@@ -487,7 +512,11 @@ def _class(parser):
 def _methods(parser):
     parser.track("_methods")
     methods = []
-    while parser.same_indent():
+    if not parser.strict_indent():
+        return None, parser.error("invalid indentation")
+
+    base_indent = parser.curr_indent()
+    while base_indent == parser.curr_indent():
         if not parser.is_kind(lexkind.DEF):
             return None, parser.error("expected method")
         f, err = _func(parser)
@@ -544,11 +573,11 @@ def _arguments(parser):
     _, err = parser.expect(lexkind.LEFT_PAREN, "left parenthesis '('")
     if err != None:
         return None, err
-    if parser.is_kind(lexkind.NEWLINE):
+    if parser.is_kind(lexkind.NL):
         _, err = _NL(parser)
         if err != None:
             return None, err
-    args, err = _arglist(parser)
+    args, err = _arg_list(parser)
     if err != None:
         return None, err
     _, err = parser.expect(lexkind.RIGHT_PAREN, "right parenthesis ')'")
@@ -562,6 +591,8 @@ def _arg_list(parser):
     list, err = parser.repeat_multiline_comma_list(_arg)
     if err != None:
         return None, err
+    if list == None:
+        return None, None
     n = Node(None, nodekind.ARG_LIST)
     n.leaves = list
     return n, None
@@ -666,6 +697,92 @@ def _unary_suffix(parser):
             return last, None
     return term, None
 
+# Suffix = Call
+#        | DotAccess
+#        | Index.
+def _suffix(parser):
+    parser.track("_suffix")
+    if parser.is_kind(lexkind.LEFT_PAREN):
+        return _call(parser)
+    elif parser.is_kind(lexkind.LEFT_BRACKET):
+        return _index(parser)
+    elif parser.is_kind(lexkind.DOT):
+        return _dot_access(parser)
+    else:
+        return None, None
+
+# Call = '(' [NL] [MultiLine_ExprList] ')'.
+def _call(parser):
+    parser.track("_call")
+    _, err = parser.expect(lexkind.LEFT_PAREN, "left parenthesis '('")
+    if err != None:
+        return None, err
+    if parser.is_kind(lexkind.NL):
+        _, err = _NL(parser)
+        if err != None:
+            return None, err
+    args, err = _multiline_expr_list(parser)
+    if err != None:
+        return None, err
+    _, err = parser.expect(lexkind.RIGHT_PAREN, "right parenthesis ')'")
+    if err != None:
+        return None, err
+    n = Node(None, nodekind.CALL)
+    n.leaves = [args]
+    return n, None
+
+# Index = '[' [NL] Expr [':' Expr] ']'.
+def _index(parser):
+    parser.track("_index")
+    _, err = parser.expect(lexkind.LEFT_BRACKET, "lleft bracket '['")
+    if err != None:
+        return None, err
+    if parser.is_kind(lexkind.NL):
+        _, err = _NL(parser)
+        if err != None:
+            return None, err
+    expr_1, err = parser.expect_prod(_expr, "expression")
+    if err != None:
+        return None, err
+    expr_2 = None
+    if parser.is_kind(lexkind.COLON):
+        _, err = parser.consume()
+        if err != None:
+            return None, err
+        expr_2, err = parser.expect_prod(_expr, "expression")
+        if err != None:
+            return None, err
+
+    _, err = parser.expect(lexkind.RIGHT_BRACKET, "right bracket ']'")
+    if err != None:
+        return None, err
+
+    n = None
+    if expr_2 != None:
+        n = Node(None, nodekind.SLICE)
+        n.leaves = [expr_1, expr_2]
+    else:
+        n = Node(None, nodekind.INDEX)
+        n.leaves = [expr_1]
+    return n, None
+
+# DotAccess = '.' id.
+def _dot_access(parser):
+    parser.track("_dot_access")
+    if not parser.is_kind(lexkind.DOT):
+        return None, None
+
+    _, err = parser.consume()
+    if err != None:
+        return None, err
+    id, err = parser.expect(lexkind.ID, "identifier")
+    if err != None:
+        return None, err
+
+    n = Node(None, nodekind.FIELD_ACCESS)
+    n.leaves = [id]
+    return n, None
+
 
 # Term = 'self' | 'None' | bool | num
 #        | str  | id     | NestedExpr_Tuple
@@ -681,11 +798,11 @@ def _term(parser):
                         lexkind.NUM]):
         return parser.consume()
     elif parser.is_kind(lexkind.LEFT_BRACKET):
-        return _nested_expr_tuple(parser)
+        return _list(parser)
     elif parser.is_kind(lexkind.LEFT_BRACE):
         return _dict(parser)
     elif parser.is_kind(lexkind.LEFT_PAREN):
-        return _list(parser)
+        return _nested_expr_tuple(parser)
     else:
         return None, None
 
@@ -694,11 +811,11 @@ def _dict(parser):
     _, err = parser.expect(lexkind.LEFT_BRACE, "left brace '{'")
     if err != None:
         return None, err
-    if parser.is_kind(lexkind.NEWLINE):
+    if parser.is_kind(lexkind.NL):
         _, err = _NL(parser)
         if err != None:
             return None, err
-    kvlist, err = _keyvalue_list(parser)
+    kvlist, err = _key_value_list(parser)
     if err != None:
         return None, err
     _, err = parser.expect(lexkind.RIGHT_BRACE, "right brace '}'")
@@ -708,12 +825,43 @@ def _dict(parser):
     n.leaves = [kvlist]
     return n, None
 
+# KeyValue_List = KeyValue_Expr {CommaNL KeyValue_Expr} [CommaNL].
+def _key_value_list(parser):
+    kv_list, err = parser.repeat_multiline_comma_list(_key_value_expr)
+    if err != None:
+        return None, err
+    if kv_list == None:
+        return None, None
+    n = Node(None, nodekind.KEY_VALUE_LIST)
+    n.leaves = kv_list
+    return n, None
+
+# KeyValue_Expr = Expr [':' Expr].
+def _key_value_expr(parser):
+    key, err = _expr(parser)
+    if err != None:
+        return None, err
+    if key == None:
+        return None, None
+    if parser.is_kind(lexkind.COLON):
+        _, err = parser.consume()
+        if err != None:
+            return None, err
+
+        value, err = parser.expect_prod(_expr, "expression")
+        if err != None:
+            return None, err
+        n = Node(None, nodekind.KEY_VALUE_PAIR)
+        n.leaves = [key, value]
+        return n, None
+    return key, None
+
 # List = '[' [NL] MultiLine_ExprList ']'.
 def _list(parser):
     _, err = parser.expect(lexkind.LEFT_BRACKET, "left bracket '['")
     if err != None:
         return None, err
-    if parser.is_kind(lexkind.NEWLINE):
+    if parser.is_kind(lexkind.NL):
         _, err = _NL(parser)
         if err != None:
             return None, err
@@ -732,14 +880,14 @@ def _nested_expr_tuple(parser):
     _, err = parser.expect(lexkind.LEFT_PAREN, "left parenthesis '('")
     if err != None:
         return None, err
-    if parser.is_kind(lexkind.NEWLINE):
+    if parser.is_kind(lexkind.NL):
         _, err = _NL(parser)
         if err != None:
             return None, err
     expr_list, err = _multiline_expr_list(parser)
     if err != None:
         return None, err
-    _, err = parser.expect(lexkind.RIGHT_BRACKET, "right parenthesis ')'")
+    _, err = parser.expect(lexkind.RIGHT_PAREN, "right parenthesis ')'")
     if err != None:
         return None, err
 
@@ -779,14 +927,14 @@ def _mult_op(parser):
 
 # NL = nl {nl}.
 def _NL(parser):
-    _, err = parser.expect(lexkind.NEWLINE, "line break")
+    _, err = parser.expect(lexkind.NL, "line break")
     if err != None:
         return None, err
     _discard_nl(parser)
     return None, None
 
 def _discard_nl(parser):
-    while parser.is_kind(lexkind.NEWLINE):
+    while parser.is_kind(lexkind.NL):
         parser.consume()
 
 # CommaNL = ',' [NL].
