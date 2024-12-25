@@ -57,11 +57,18 @@ class Error:
         self.message = string
         self.range = range
     def __str__(self):
-        return "error " + self.range.__str__() + ": "+ self.message
+        if self.range != None:
+            return "error " + self.range.__str__() + ": "+ self.message
+        else:
+            return "error: " + self.message
     def copy(self):
-        return Error(self.message, self.range.copy())
+        if self.range != None:
+            return Error(self.message, self.range.copy())
+        else:
+            return Error(self.message, None)
     def correct_editor_view(self):
-        self.range.correct_editor_view()
+        if self.range != None:
+            self.range.correct_editor_view()
 
 class Lexeme:
     def __init__(self, string, kind, range):
@@ -128,7 +135,7 @@ def _print_tree(node, depth):
         return _indent(depth) + "nil\n"
 
     out = _indent(depth) + nodekind.to_str(node.kind)
-    if node.kind in [nodekind.TERMINAL, nodekind.OPERATOR]:
+    if node.kind in [nodekind.TERMINAL, nodekind.BIN_OPERATOR, nodekind.UNA_OPERATOR]:
         out += " " + node.value.__str__()
     out += "\n"
 

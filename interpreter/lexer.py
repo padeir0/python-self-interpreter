@@ -68,6 +68,10 @@ class Lexer:
     def _emit(self, kind):
         s = self.string[self.start:self.end]
         return Lexeme(s, kind, self.range.copy())
+    def _emit_str(self):
+        s = self.string[self.start+1:self.end-1]
+        s = _process_str(s)
+        return Lexeme(s, lexkind.STR, self.range.copy())
 
     def _advance(self):
         self.start = self.end
@@ -276,5 +280,24 @@ class Lexer:
                 ok = False
             self._next_rune()
             r = self._peek_rune()
-        return self._emit(lexkind.STR)
+        # remove delimitadores
+        return self._emit_str()
 
+def _process_str(s):
+    out = ""
+    i = 0
+    while i < len(s):
+        r = s[i]
+        if r == "\\":
+            i += 1
+            r = s[i]
+            if r == "n":
+                out += "\n"
+            elif r == "\"":
+                out += "\""
+            elif r == "\\":
+                out += "\\"
+        else:
+            out += r
+        i += 1
+    return out

@@ -144,3 +144,40 @@ Para implementar os `for` loops em python, é necessário o uso dos métodos `__
 os métodos `__next__` do próprio CPython, ele precisa de entender exceções
 [6](https://docs.python.org/3/library/stdtypes.html#iterator.__iter__:~:text=If%20there%20are%20no%20further%20items%2C%20raise%20the%20StopIteration%20exception.)
 , e elas não serão implementadas.
+
+# String Escapes
+
+É possivel escrever 3 tipos de escapes dentro de strings:
+`\n`, `\"` e `\\`. Mas como o interpretador sabe o valor númerico ASCII
+desses caras? Observe a implementação que traduz um escape pra um
+caractere:
+
+```
+def _process_str(s):
+    out = ""
+    i = 0
+    while i < len(s):
+        r = s[i]
+        if r == "\\":
+            i += 1
+            r = s[i]
+            if r == "n":
+                out += "\n"
+            elif r == "\"":
+                out += "\""
+            elif r == "\\":
+                out += "\\"
+        else:
+            out += r
+        i += 1
+    return out
+```
+
+Parece que `\"` é definido em termos dele mesmo! Mas isso não é verdade.
+O que acontece é que o interpretador de CPython sabe o valor desses
+escapes, porque C sabe o valor desses escapes. Acontece então o seguinte:
+
+ - PSY-PSY interpreta um programa e lê `\n` de acordo com PSY
+ - PSY interpreta o próprio código e define `\n` em termos de CPython
+ - CPython interpreta `\n` e define em termos de C
+ - C define o valor como `0xA`

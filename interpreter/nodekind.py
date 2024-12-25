@@ -1,32 +1,34 @@
 INVALID = -1
-TERMINAL = 0
-BLOCK = 1
-ID_LIST = 2        # [id_1, id_2, ...]
-EXPR_LIST = 3      # [expr_1, expr_2, ...]
-ARG_LIST = 4       # [arg_1, arg_2, ...]
+TERMINAL = 0        # None
+BLOCK = 1           # [sttm_1, sttm_2, ...]
+ID_LIST = 2         # [id_1, id_2, ...]
+EXPR_LIST = 3       # [expr_1, expr_2, ...]
+ARG_LIST = 4        # [arg_1, arg_2, ...]
 KEY_VALUE_LIST = 5  # [kv_1, kv_2, ...]
-FROM_IMPORT = 6    # [id, idlist]
-IMPORT = 7         # [idlist]
-WHILE = 9
-IF = 10
-ELIF = 11
-ELSE = 12
-CLASS = 13
-METHODS = 14
-TUPLE = 15
-OPERATOR = 16
-ASSIGN = 17
-AUGMENTED_ASSIGN = 18
-MULTI_ASSIGN = 19
-SLICE = 20
-FIELD_ACCESS = 21
-FUNC = 22
-CALL = 23
-LIST = 24
-DICT = 25
-INDEX = 26
-KEY_VALUE_PAIR = 27
-ELIF_LIST = 28
+FROM_IMPORT = 6     # [id, idlist]
+IMPORT = 7          # [id_list]
+WHILE = 9           # [expr, block]
+IF = 10             # [exp, block, elifs, else]
+ELIF = 11           # [exp, block]
+ELSE = 12           # [block]
+CLASS = 13          # [id, methods]
+METHODS = 14        # [method_1, method_2, ...]
+TUPLE = 15          # [expr_list]
+BIN_OPERATOR = 16   # [left_op, right_op]
+ASSIGN = 17          # [lhs_expr, rhs_expr]
+AUGMENTED_ASSIGN = 18 # [lhs_expr, rhs_expr]
+MULTI_ASSIGN = 19   # [lhs_expr_list, rhs_expr]
+SLICE = 20          # [expr_1, expr_2, operand_expr]
+FIELD_ACCESS = 21   # [field, operand_expr]
+FUNC = 22           # [id, args, block]
+CALL = 23           # [expr_list, operand_expr]
+LIST = 24           # [expr_list]
+DICT = 25           # [kv_list]
+INDEX = 26          # [expr_1, operand_expr]
+KEY_VALUE_PAIR = 27 # [key, value]
+ELIF_LIST = 28      # [elif1, elif2, ...]
+UNA_OPERATOR = 29   # [operand]
+RETURN = 30         # [expr_list]
 
 def to_str(kind):
     if kind == INVALID: 
@@ -61,8 +63,10 @@ def to_str(kind):
         return "METHODS"
     elif kind == TUPLE: 
         return "TUPLE"
-    elif kind == OPERATOR: 
-        return "OPERATOR"
+    elif kind == BIN_OPERATOR: 
+        return "BIN_OPERATOR"
+    elif kind == UNA_OPERATOR: 
+        return "UNA_OPERATOR"
     elif kind == ASSIGN: 
         return "ASSIGN"
     elif kind == AUGMENTED_ASSIGN: 
@@ -87,5 +91,7 @@ def to_str(kind):
         return "KEY_VALUE_PAIR"
     elif kind == ELIF_LIST:
         return "ELIF_LIST"
+    elif kind == RETURN:
+        return "RETURN"
     else:
         return "???"

@@ -1,0 +1,12 @@
+INVALID       = -1
+NUM           = 0
+STR           = 1
+TUPLE         = 2
+LIST          = 3
+SET           = 4
+DICT          = 5
+USER_OBJECT   = 6
+USER_METHOD   = 7
+USER_FUNCTION = 8
+MODULE        = 9
+BUILTIN_FUNC  = 10

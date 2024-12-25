@@ -1,0 +1,4 @@
+INVALID  = -1
+FUNCTION = 0
+MODULE   = 1
+BUILTIN  = 2

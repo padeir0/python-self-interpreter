@@ -62,7 +62,7 @@ class _Parser:
             parent, err = self.consume()
             if err != None:
                 return None, err
-            parent.kind = nodekind.OPERATOR
+            parent.kind = nodekind.BIN_OPERATOR
             parent.add_leaf(last)
 
             newLeaf, err = production(self)
@@ -398,7 +398,7 @@ def _return(parser):
     if err != None:
         return None, err
 
-    n = Node(None, nodekind.EXPR_LIST)
+    n = Node(None, nodekind.RETURN)
     n.leaves = [exprlist]
     return n, None
 
@@ -643,10 +643,12 @@ def _unary_prefix(parser):
 # prefix = 'not' | '-'.
 def _prefix(parser):
     parser.track("_prefix")
-    if parser.is_kind(lexkind.NOT):
-        return parser.consume()
-    elif parser.is_kind(lexkind.MINUS):
-        return parser.consume()
+    if parser.is_kinds([lexkind.NOT, lexkind.MINUS]):
+        n, err = parser.consume()
+        if err != None:
+            return None, err
+        n.kind = nodekind.UNA_OPERATOR
+        return n, None
     else:
         return None, None
 
@@ -667,8 +669,8 @@ def _unary_suffix(parser):
         # sufixos precisam formar uma arvore de acordo com a precedencia
         i = len(list)-1
         while 0 < i:
-            if 0 < i-1:
-                list[i-1].add_leaf(list[i])
+            if 0 <= i-1:
+                list[i].add_leaf(list[i-1])
             i-=1
         if len(list) > 0:
             first = list[0]
