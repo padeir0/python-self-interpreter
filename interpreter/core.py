@@ -19,6 +19,24 @@ class Position:
         # coluna 1
         self.line += 1
         self.column += 1
+    def less(self, other):
+        if self.line < other.line:
+            return True
+        if self.line > other.line:
+            return False
+        # aqui as linhas são iguais
+        if self.column < other.column:
+            return True
+        return False
+    def more(self, other):
+        if self.line > other.line:
+            return True
+        if self.line < other.line:
+            return False
+        # aqui as linhas são iguais
+        if self.column > other.column:
+            return True
+        return False
 
 # representa uma seção continua do código fonte
 # start e end tem que ser da classe Position
@@ -41,7 +59,7 @@ class Error:
     def __str__(self):
         return "error " + self.range.__str__() + ": "+ self.message
     def copy(self):
-        return Error(self.string, self.range.copy())
+        return Error(self.message, self.range.copy())
     def correct_editor_view(self):
         self.range.correct_editor_view()
 
@@ -78,20 +96,29 @@ class Node:
             self.range = self.value.range.copy()
             return;
         self.range = Range(Position(0, 0), Position(0, 0))
-        for leaf in self.leaves:
-            leaf.compute_range()
-            if leaf.range.start.less(self.range.start):
-                self.range.start = leaf.range.start.copy()
-            if leaf.range.end.more(self.range.end):
-                self.range.end = leaf.range.end.copy()
+        i = 0
+        while i < len(self.leaves):
+            leaf = self.leaves[i]
+
+            if leaf != None:
+                leaf.compute_range()
+                if leaf.range.start.less(self.range.start):
+                    self.range.start = leaf.range.start.copy()
+                if leaf.range.end.more(self.range.end):
+                    self.range.end = leaf.range.end.copy()
+            i += 1
 
     def __str__(self):
         return _print_tree(self, 0)
 
     def copy(self):
         leaves = []
-        for leaf in self.leaves:
+        i = 0
+        while i < len(self.leaves):
+            leaf = self.leaves[i]
+
             leaves += [leaf.copy()]
+            i += 1
         n = Node(self.value.copy())
         n.leaves = leaves
         return n
@@ -105,8 +132,12 @@ def _print_tree(node, depth):
         out += " " + node.value.__str__()
     out += "\n"
 
-    for n in node.leaves:
+    i = 0
+    while i < len(node.leaves):
+        n = node.leaves[i]
+
         out += _print_tree(n, depth+1)
+        i += 1
     return out
 
 def _indent(n):

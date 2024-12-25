@@ -33,9 +33,12 @@ class _Parser:
         return None, self.error("expected " + str)
 
     def expect_many(self, kinds, text):
-        for kind in kinds:
+        i = 0
+        while i < len(kinds):
+            kind = kinds[i]
             if self.is_kind(kind):
                 return self.consume()
+            i += 1
         return None, self.error("expected " + text)
 
     def expect_prod(self, production, text):
@@ -132,9 +135,12 @@ class _Parser:
             print(str)
 
     def is_kinds(self, kinds):
-        for kind in kinds:
+        i = 0
+        while i < len(kinds):
+            kind = kinds[i]
             if self.lexer.word.kind == kind:
                 return True
+            i += 1
         return False
 
     def is_kind(self, kind):
@@ -147,7 +153,7 @@ class _Parser:
         return self.curr_indent() > self.indent
 
 # Block = { [Statement] NL }.
-# Statement = While  | If    | For | Atrib_Expr
+# Statement = While  | If    | Atrib_Expr
 #           | Return | Class | Func
 #           | Import | FromImport | Pass.
 def _block(parser):
@@ -164,8 +170,6 @@ def _block(parser):
             n, err = _while(parser)
         elif parser.is_kind(lexkind.IF):
             n, err = _if(parser)
-        elif parser.is_kind(lexkind.FOR):
-            n, err = _for(parser)
         elif parser.is_kind(lexkind.RETURN):
             n, err = _return(parser)
         elif parser.is_kind(lexkind.FROM):
@@ -190,7 +194,6 @@ def _block(parser):
 
         if n != None:
             statements += [n]
-    print(base_indent, parser.curr_indent(), parser.lexer.word)
 
     block = Node(None, nodekind.BLOCK)
     block.leaves = statements
@@ -358,43 +361,6 @@ def _else(parser):
 
     n = Node(None, nodekind.ELSE)
     n.leaves = [block]
-    return n, None
-
-# For = 'for' id 'in' Expr ':' NL >Block.
-def _for(parser):
-    parser.track("_for")
-    kw, err = parser.expect(lexkind.FOR, "'for' keyword")
-    if err != None:
-        return None, err
-
-    id, err = parser.expect(lexkind.ID, "identifier")
-    if err != None:
-        return None, err
-
-    _, err = parser.expect(lexkind.IN, "'in' keyword")
-    if err != None:
-        return None, err
-
-    exp, err = parser.expect_prod(_expr, "expression")
-    if err != None:
-        return None, err
-
-    _, err = parser.expect(lexkind.COLON, "a colon ':'")
-    if err != None:
-        return None, err
-    _, err = _NL(parser)
-    if err != None:
-        return None, err
-
-    prev_indent = parser.indent
-    parser.indent = kw.value.start_column() + 1
-    block, err = _block(parser)
-    if err != None:
-        return None, err
-    parser.indent = prev_indent
-
-    n = Node(None, nodekind.FOR)
-    n.leaves = [id, exp, block]
     return n, None
 
 # MultiLine_ExprList = Expr {CommaNL Expr} [CommaNL].
@@ -916,6 +882,7 @@ def _nested_expr_tuple(parser):
 # compOp = '==' | '!=' | '>' | '>=' | '<' | '<=' | 'in'.
 def _comp_op(parser):
     kinds = [
+        lexkind.IN,
         lexkind.EQUALS,
         lexkind.DIFF,
         lexkind.GREATER,

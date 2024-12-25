@@ -7,7 +7,6 @@ ARG_LIST = 4       # [arg_1, arg_2, ...]
 KEY_VALUE_LIST = 5  # [kv_1, kv_2, ...]
 FROM_IMPORT = 6    # [id, idlist]
 IMPORT = 7         # [idlist]
-FOR = 8
 WHILE = 9
 IF = 10
 ELIF = 11
@@ -48,8 +47,6 @@ def to_str(kind):
         return "FROM_IMPORT"
     elif kind == IMPORT: 
         return "IMPORT"
-    elif kind == FOR: 
-        return "FOR"
     elif kind == WHILE: 
         return "WHILE"
     elif kind == IF: 

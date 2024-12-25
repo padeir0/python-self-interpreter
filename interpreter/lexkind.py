@@ -14,7 +14,6 @@ NONE = 9
 IF = 10
 ELIF = 11
 ELSE = 12
-FOR = 13
 WHILE = 14
 RETURN = 15
 DEF = 16
@@ -91,8 +90,6 @@ def to_string(kind):
         return "ELIF"
     elif kind == ELSE:
         return "ELSE"
-    elif kind == FOR:
-        return "FOR"
     elif kind == WHILE:
         return "WHILE"
     elif kind == RETURN:

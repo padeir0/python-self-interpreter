@@ -19,7 +19,7 @@ Module = Block.
 Block = { Statement NL }.
 NL = nl {nl}.
 
-Statement = While  | If    | For | Atrib_Expr
+Statement = While  | If    | Atrib_Expr
           | Return | Class | Func
           | Import | FromImport | Pass.
 
@@ -35,7 +35,6 @@ If = 'if' Expr ':' NL >Block {Elif} [Else].
 Elif = 'elif' Expr ':' NL >Block.
 Else = 'else' ':' NL >Block.
 
-For = 'for' id 'in' Expr ':' NL >Block.
 Atrib_Expr = Expr [Assign_Op Expr].
 
 Return = 'return' ExprList.

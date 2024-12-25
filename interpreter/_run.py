@@ -40,11 +40,14 @@ def extract_offense(range, program):
 
 def do_the_thing(dict, modname):
     input = dict[modname]
-    root, err = parse(input, True)
+    root, err = parse(input, False)
     if err != None:
-        print(err)
+        e = err.copy()
+        e.correct_editor_view() 
+        print(e)
         print("\t" + extract_offense(err.range, input))
     else:
+        root.compute_range()
         print("")
         print(root)
 

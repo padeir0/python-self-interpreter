@@ -136,3 +136,11 @@ Uma propriedade é **mutavel** se não é o nome de algum método.
 
 Note que isso pode ser checado facilmente com um procedimento recursivo,
 mesmo no caso que o lado esquerdo da atribuição tenha multiplas expressões.
+
+# Ausência de `for` loops
+
+Para implementar os `for` loops em python, é necessário o uso dos métodos `__iter__` e
+`__next__`, e o segundo se comunica por meio de exceções. Por consequência, pro interpretador usar
+os métodos `__next__` do próprio CPython, ele precisa de entender exceções
+[6](https://docs.python.org/3/library/stdtypes.html#iterator.__iter__:~:text=If%20there%20are%20no%20further%20items%2C%20raise%20the%20StopIteration%20exception.)
+, e elas não serão implementadas.

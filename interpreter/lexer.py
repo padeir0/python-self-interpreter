@@ -242,8 +242,6 @@ class Lexer:
             return self._emit(lexkind.ELIF)
         elif s == "else":
             return self._emit(lexkind.ELSE)
-        elif s == "for":
-            return self._emit(lexkind.FOR)
         elif s == "in":
             return self._emit(lexkind.IN)
         elif s == "while":
@@ -272,8 +270,7 @@ class Lexer:
             if r == "\\":
                 self._next_rune()
                 r = self._peek_rune()
-                # permitimos apenas \n e \"
-                if not r in ["n", "\""]:
+                if not r in ["n", "\"", "\\"]:
                     return self._emit(lexkind.INVALID)
             elif r == "\"":
                 ok = False
