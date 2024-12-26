@@ -4,6 +4,17 @@ import nodekind
 # esse arquivo contém as principais estruturas de dados
 # e suas funções utilitárias
 
+class Result:
+    def __init__(self, value, error):
+        self.value = value
+        self.error = error
+
+    def ok(self):
+        return self.error == None
+
+    def failed(self):
+        return self.error != None
+
 # representa uma posição no código fonte
 class Position:
     def __init__(self, line, column):

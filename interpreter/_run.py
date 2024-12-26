@@ -40,16 +40,16 @@ def extract_offense(range, program):
 
 def do_the_thing(dict, modname):
     input = dict[modname]
-    root, err = parse(input, False)
-    if err != None:
-        e = err.copy()
+    res = parse(input, False)
+    if res.failed():
+        e = res.error.copy()
         e.correct_editor_view() 
         print(e)
-        print("\t" + extract_offense(err.range, input))
+        print("\t" + extract_offense(res.error.range, input))
     else:
-        root.compute_range()
+        res.value.compute_range()
         print("")
-        print(root)
+        print(res.value)
 
 def get_python_files(directory_path):
     files_contents = {}

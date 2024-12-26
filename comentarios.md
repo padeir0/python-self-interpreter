@@ -181,3 +181,15 @@ escapes, porque C sabe o valor desses escapes. Acontece então o seguinte:
  - PSY interpreta o próprio código e define `\n` em termos de CPython
  - CPython interpreta `\n` e define em termos de C
  - C define o valor como `0xA`
+
+# Ausência de Tuplas
+
+Não temos tuplas em Spy por dois motivos: são redundantes e 
+sua implementação não é inteiramente simples. Considere, por exemplo,
+como poderiamos criar dinamicamente a tupla `(1, 2, 3)` através da lista `[1, 2, 3]`,
+sem usar o construtor da classe?
+
+Por isso, usamos listas ou objetos onde tuplas tomariam o lugar.
+
+Com isso, também não implementamos multiplos retornos ou
+detupling (sei la o nome disso em python).

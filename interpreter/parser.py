@@ -1,14 +1,22 @@
 import lexkind
 import nodekind
 from lexer import Lexer
-from core import Node, Error
+from core import Result, Node, Error
 
 def parse(string, track):
     parser = _Parser(Lexer(string))
     if track:
         parser.start_tracking()
     parser.track("parser.parse")
-    return _block(parser)
+    res = _block(parser)
+    if res.failed():
+        return res
+
+    if not parser.word_is(lexkind.EOF):
+        err = parser.error("unexpected token or symbol")
+        return Result(None, err)
+
+    return res
 
 class _Parser:
     def __init__(self, lexer):
@@ -21,111 +29,114 @@ class _Parser:
         return Error(str, self.lexer.word.range.copy())
 
     def consume(self):
-        if self.is_kind(lexkind.INVALID):
-            return None, self.error("invalid character")
+        if self.word_is(lexkind.INVALID):
+            err = self.error("invalid character")
+            return Result(None, err)
         out = self.lexer.word
         self.lexer.next()
-        return Node(out, nodekind.TERMINAL), None
+        n = Node(out, nodekind.TERMINAL)
+        return Result(n, None)
 
     def expect(self, kind, str):
-        if self.is_kind(kind):
+        if self.word_is(kind):
             return self.consume()
-        return None, self.error("expected " + str)
+        err = self.error("expected " + str)
+        return Result(None, err)
 
     def expect_many(self, kinds, text):
         i = 0
         while i < len(kinds):
             kind = kinds[i]
-            if self.is_kind(kind):
+            if self.word_is(kind):
                 return self.consume()
             i += 1
-        return None, self.error("expected " + text)
+        err = self.error("expected " + text)
+        return Result(None, err)
 
     def expect_prod(self, production, text):
-        n, err = production(self)
-        if err != None:
-            return None, err
-        if n == None:
-            return None, self.error("expected " + text)
-        return n, None
+        res = production(self)
+        if res.failed():
+            return res
+        if res.value == None:
+            err = self.error("expected " + text)
+            return Result(None, err)
+        return res
         
     # implements:
     #     Production {operators Production}
     #     where 'operators' are recognized by the predicate
     def repeat_binary(self, production, predicate):
-        last, err = production(self)
-        if err != None:
-            return None, err
-        if last == None:
-            return None, None
+        res = production(self)
+        if res.failed() or res.value == None:
+            return res
+
+        last = res.value
         while predicate(self):
-            parent, err = self.consume()
-            if err != None:
-                return None, err
+            res = self.consume()
+            if res.failed():
+                return res
+            parent = res.value
             parent.kind = nodekind.BIN_OPERATOR
             parent.add_leaf(last)
 
-            newLeaf, err = production(self)
-            if err != None:
-                return None, err
-            parent.add_leaf(newLeaf)
+            res = production(self)
+            if res.failed():
+                return res
+            parent.add_leaf(res.value)
             last = parent
-        return last, None
+        return Result(last, None)
 
     # implements:
     #     {Production}
     def repeat(self, production):
         list = []
-        last, err = production(self)
-        if err != None:
-            return None, err
-        if last == None:
-            return None, None
+        res = production(self)
+        if res.failed() or res.value == None:
+            return res
+
+        last = res.value
         while last != None:
             list += [last]
 
-            last, err = production(self)
-            if err != None:
-                return None, err
-        return list, None
+            res = production(self)
+            if res.failed():
+                return res
+            last = res.value
+        return Result(list, None)
 
     # implements:
     #    Production {',' Production} [','].
     def repeat_comma_list(self, production):
-        first, err = production(self)
-        if err != None:
-            return None, err
-        if first == None:
-            return None, None
-        list = [first]
-        while self.is_kind(lexkind.COMMA):
+        res = production(self)
+        if res.failed() or res.value == None:
+            return res
+        list = [res.value]
+        while self.word_is(lexkind.COMMA):
             self.lexer.next()
-            n, err = production(self)
-            if err != None:
-                return None, err
-            if n == None:
-                return list, None
-            list += [n]
-        return list, None
+            res = production(self)
+            if res.failed():
+                return res
+            if res.value == None:
+                return Result(list, None)
+            list += [res.value]
+        return Result(list, None)
 
     # implements:
     #    Production {[CommaNL] Production} [CommaNL].
     def repeat_multiline_comma_list(self, production):
-        first, err = production(self)
-        if err != None:
-            return None, err
-        if first == None:
-            return None, None
-        list = [first]
-        while self.is_kind(lexkind.COMMA):
+        res = production(self)
+        if res.failed() or res.value == None:
+            return res
+        list = [res.value]
+        while self.word_is(lexkind.COMMA):
             _comma_nl(self)
-            n, err = production(self)
-            if err != None:
-                return None, err
-            if n == None:
-                return list, None
-            list += [n]
-        return list, None
+            res = production(self)
+            if res.failed():
+                return res
+            if res.value == None:
+                return Result(list, None)
+            list += [res.value]
+        return Result(list, None)
 
     def start_tracking(self):
         self.is_tracking = True
@@ -134,7 +145,7 @@ class _Parser:
         if self.is_tracking:
             print(str)
 
-    def is_kinds(self, kinds):
+    def word_is_one_of(self, kinds):
         i = 0
         while i < len(kinds):
             kind = kinds[i]
@@ -143,7 +154,7 @@ class _Parser:
             i += 1
         return False
 
-    def is_kind(self, kind):
+    def word_is(self, kind):
         return self.lexer.word.kind == kind
 
     def curr_indent(self):
@@ -151,6 +162,17 @@ class _Parser:
 
     def strict_indent(self):
         return self.curr_indent() > self.indent
+
+    def indent_prod(self, base_indent, production):
+        prev_indent = self.indent
+        self.indent = base_indent + 1
+        res = production(self)
+        if res.failed():
+            return res
+        out = res.value
+        self.indent = prev_indent
+        return Result(out, None)
+        
 
 # Block = { [Statement] NL }.
 # Statement = While  | If    | Atrib_Expr
@@ -160,431 +182,444 @@ def _block(parser):
     parser.track("_block")
     statements = []
     if not parser.strict_indent():
-        return None, parser.error("invalid indentation")
+        err = parser.error("invalid indentation")
+        return Result(None, err)
 
     base_indent = parser.curr_indent()
-    while base_indent == parser.curr_indent() and not parser.is_kind(lexkind.EOF):
-        n = None
-        err = None
-        if parser.is_kind(lexkind.WHILE):
-            n, err = _while(parser)
-        elif parser.is_kind(lexkind.IF):
-            n, err = _if(parser)
-        elif parser.is_kind(lexkind.RETURN):
-            n, err = _return(parser)
-        elif parser.is_kind(lexkind.FROM):
-            n, err = _from(parser)
-        elif parser.is_kind(lexkind.IMPORT):
-            n, err = _import(parser)
-        elif parser.is_kind(lexkind.CLASS):
-            n, err = _class(parser)
-        elif parser.is_kind(lexkind.PASS):
-            n, err = _pass(parser)
-        elif parser.is_kind(lexkind.DEF):
-            n, err = _func(parser)
+    while base_indent == parser.curr_indent() and not parser.word_is(lexkind.EOF):
+        res = None
+        if parser.word_is(lexkind.WHILE):
+            res = _while(parser)
+        elif parser.word_is(lexkind.IF):
+            res = _if(parser)
+        elif parser.word_is(lexkind.RETURN):
+            res = _return(parser)
+        elif parser.word_is(lexkind.FROM):
+            res = _from(parser)
+        elif parser.word_is(lexkind.IMPORT):
+            res = _import(parser)
+        elif parser.word_is(lexkind.CLASS):
+            res = _class(parser)
+        elif parser.word_is(lexkind.PASS):
+            res = _pass(parser)
+        elif parser.word_is(lexkind.DEF):
+            res = _func(parser)
         else:
-            n, err = _atrib_expr(parser)
-        if err != None:
-            return None, err
+            res = _atrib_expr(parser)
+        if res.failed():
+            return res
+        sttm = res.value
 
-        if parser.is_kind(lexkind.NL):
-            _, err = _NL(parser)
-            if err != None:
-                return None, err
+        if parser.word_is(lexkind.NL):
+            res = _NL(parser)
+            if res.failed():
+                return res
 
-        if n != None:
-            statements += [n]
+        if sttm != None:
+            statements += [sttm]
 
     block = Node(None, nodekind.BLOCK)
     block.leaves = statements
-    return block, None
+    return Result(block, None)
 
-# Atrib_Expr = ExprList [Assign_Op Expr].
+# Atrib_Expr = Expr [Assign_Op Expr].
 def _atrib_expr(parser):
     parser.track("_atrib_expr")
-    lhs, err = _expr_list(parser)
-    if err != None:
-        return None, err
-    if lhs == None:
-        return None, None
-    if parser.is_kind(lexkind.ASSIGN):
-        op, err = parser.consume()
-        if err != None:
-            return None, err
-        rhs, err = parser.expect_prod(_expr, "expression on right hand side")
-        if err != None:
-            return None, err
-        if len(lhs.leaves) > 1:
-            op.kind = nodekind.MULTI_ASSIGN
-            op.leaves = [lhs, rhs]
-        else:
-            op.kind = nodekind.ASSIGN
-            op.leaves = [lhs.leaves[0], rhs]
-        return op, None
-    elif parser.is_kinds([lexkind.ASSIGN_PLUS,
-                          lexkind.ASSIGN_MINUS,
-                          lexkind.ASSIGN_MULT,
-                          lexkind.ASSIGN_DIV,
-                          lexkind.ASSIGN_REM]):
-        op, err = parser.consume()
-        if err != None:
-            return None, err
-        rhs, err = parser.expect_prod(_expr, "expression")
-        if err != None:
-            return None, err
-        if len(lhs.leaves) > 1:
-            lhs.compute_range()
-            return None, Error("illegal expression for augmented assignment", lhs.range.copy())
+    res = _expr(parser)
+    if res.failed() or res.value == None:
+        return res
+    lhs = res.value
+    if parser.word_is(lexkind.ASSIGN):
+        res = parser.consume()
+        if res.failed():
+            return res
+        op = res.value
+        res = parser.expect_prod(_expr, "expression on right hand side")
+        if res.failed():
+            return res
+        rhs = res.value
+        op.kind = nodekind.ASSIGN
+        op.leaves = [lhs, rhs]
+        return Result(op, None)
+    elif parser.word_is_one_of([lexkind.ASSIGN_PLUS,
+                                lexkind.ASSIGN_MINUS,
+                                lexkind.ASSIGN_MULT,
+                                lexkind.ASSIGN_DIV,
+                                lexkind.ASSIGN_REM]):
+        res = parser.consume()
+        if res.failed():
+            return res
+        op = res.value
+        res = parser.expect_prod(_expr, "expression on right hand side")
+        if res.failed():
+            return res
+        rhs = res.value
         op.kind = nodekind.AUGMENTED_ASSIGN
         op.leaves = [lhs, rhs]
-        return op, None
-    return lhs, None
+        return Result(op, None)
+    return Result(lhs, None)
 
 # While = 'while' Expr ':' NL >Block.
 def _while(parser):
     parser.track("_while")
-    kw, err = parser.expect(lexkind.WHILE, "'while' keyword")
-    if err != None:
-        return None, err
-    exp, err = parser.expect_prod(_expr, "expression")
-    if err != None:
-        return None, err
-    _, err = parser.expect(lexkind.COLON, "a colon ':'")
-    if err != None:
-        return None, err
-    _, err = _NL(parser)
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.WHILE, "'while' keyword")
+    if res.failed():
+        return res
+    kw = res.value
 
-    prev_indent = parser.indent
-    parser.indent = kw.value.start_column() + 1
-    block, err = _block(parser)
-    if err != None:
-        return None, err
-    parser.indent = prev_indent
+    res = parser.expect_prod(_expr, "expression")
+    if res.failed():
+        return res
+    exp = res.value
+
+    res = parser.expect(lexkind.COLON, "a colon ':'")
+    if res.failed():
+        return res
+    res = _NL(parser)
+    if res.failed():
+        return res
+
+    res = parser.indent_prod(kw.value.start_column(), _block)
+    if res.failed():
+        return res
+    block = res.value
 
     n = Node(None, nodekind.WHILE)
     n.leaves = [exp, block]
-    return n, None
+    return Result(n, None)
 
 # If = 'if' Expr ':' NL >Block {Elif} [Else].
 def _if(parser):
     parser.track("_if")
-    kw, err = parser.expect(lexkind.IF, "'if' keyword")
-    if err != None:
-        return None, err
-    exp, err = parser.expect_prod(_expr, "expression")
-    if err != None:
-        return None, err
-    _, err = parser.expect(lexkind.COLON, "a colon ':'")
-    if err != None:
-        return None, err
-    _, err = _NL(parser)
-    if err != None:
-        return None, err
 
-    prev_indent = parser.indent
-    parser.indent = kw.value.start_column() + 1
-    block, err = _block(parser)
-    if err != None:
-        return None, err
-    parser.indent = prev_indent
+    res = parser.expect(lexkind.IF, "'if' keyword")
+    if res.failed():
+        return res
+    kw = res.value
 
-    _the_elifs, err = parser.repeat(_elif)
-    if err != None:
-        return None, err
+    res = parser.expect_prod(_expr, "expression")
+    if res.failed():
+        return res
+    exp = res.value
+
+    res = parser.expect(lexkind.COLON, "a colon ':'")
+    if res.failed():
+        return res
+    res = _NL(parser)
+    if res.failed():
+        return res
+
+    res = parser.indent_prod(kw.value.start_column(), _block)
+    if res.failed():
+        return res
+    block = res.value
+
+    res = parser.repeat(_elif)
+    if res.failed():
+        return res
+    _the_elifs = res.value
+
     elifs = None
     if _the_elifs != None:
         elifs = Node(None, nodekind.ELIF_LIST)
         elifs.leaves = _the_elifs
 
-    _the_else, err = _else(parser)
-    if err != None:
-        return None, err
+    res = _else(parser)
+    if res.failed():
+        return res
+    _the_else = res.value
 
     n = Node(None, nodekind.IF)
     n.leaves = [exp, block, elifs, _the_else]
-    return n, None
+    return Result(n, None)
 
 # Elif = 'elif' Expr ':' NL >Block.
 def _elif(parser):
     parser.track("_elif")
-    if not parser.is_kind(lexkind.ELIF):
-        return None, None
+    if not parser.word_is(lexkind.ELIF):
+        return Result(None, None)
 
-    kw, err = parser.expect(lexkind.ELIF, "'elif' keyword")
-    if err != None:
-        return None, err
-    exp, err = parser.expect_prod(_expr, "expression")
-    if err != None:
-        return None, err
-    _, err = parser.expect(lexkind.COLON, "a colon ':'")
-    if err != None:
-        return None, err
-    _, err = _NL(parser)
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.ELIF, "'elif' keyword")
+    if res.failed():
+        return res
+    kw = res.value
 
-    prev_indent = parser.indent
-    parser.indent = kw.value.start_column() + 1
-    block, err = _block(parser)
-    if err != None:
-        return None, err
-    parser.indent = prev_indent
+    res = parser.expect_prod(_expr, "expression")
+    if res.failed():
+        return res
+    exp = res.value
+
+    res = parser.expect(lexkind.COLON, "a colon ':'")
+    if res.failed():
+        return res
+    res = _NL(parser)
+    if res.failed():
+        return res
+
+    res = parser.indent_prod(kw.value.start_column(), _block)
+    if res.failed():
+        return res
+    block = res.value
 
     n = Node(None, nodekind.ELIF)
     n.leaves = [exp, block]
-    return n, None
+    return Result(n, None)
 
 # Else = 'else' ':' NL >Block.
 def _else(parser):
     parser.track("_else")
-    if not parser.is_kind(lexkind.ELSE):
-        return None, None
-    kw, err = parser.expect(lexkind.ELSE, "'else' keyword")
-    if err != None:
-        return None, err
-    _, err = parser.expect(lexkind.COLON, "a colon ':'")
-    if err != None:
-        return None, err
+    if not parser.word_is(lexkind.ELSE):
+        return Result(None, None)
+    res = parser.expect(lexkind.ELSE, "'else' keyword")
+    if res.failed():
+        return res
+    kw = res.value
 
-    _, err = _NL(parser)
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.COLON, "a colon ':'")
+    if res.failed():
+        return res
 
-    prev_indent = parser.indent
-    parser.indent = kw.value.start_column() + 1
-    block, err = _block(parser)
-    if err != None:
-        return None, err
-    parser.indent = prev_indent
+    res = _NL(parser)
+    if res.failed():
+        return res
+
+    res = parser.indent_prod(kw.value.start_column(), _block)
+    if res.failed():
+        return res
+    block = res.value
 
     n = Node(None, nodekind.ELSE)
     n.leaves = [block]
-    return n, None
+    return Result(n, None)
 
 # MultiLine_ExprList = Expr {CommaNL Expr} [CommaNL].
 def _multiline_expr_list(parser):
     parser.track("_multiline_expr_list")
-    list, err = parser.repeat_multiline_comma_list(_expr)
-    if err != None:
-        return None, err
-    if list == None:
-        return None, None
+    res = parser.repeat_multiline_comma_list(_expr)
+    if res.failed() or res.value == None:
+        return res
     n = Node(None, nodekind.EXPR_LIST)
-    n.leaves = list
-    return n, None
+    n.leaves = res.value
+    return Result(n, None)
 
 # ExprList = Expr {',' Expr} [','].
 def _expr_list(parser):
     parser.track("_expr_list")
-    list, err = parser.repeat_comma_list(_expr)
-    if err != None:
-        return None, err
-    if list == None:
-        return None, None
+    res = parser.repeat_comma_list(_expr)
+    if res.failed() or res.value == None:
+        return res
     n = Node(None, nodekind.EXPR_LIST)
-    n.leaves = list
-    return n, None
+    n.leaves = res.value
+    return Result(n, None)
 
-# Return = 'return' ExprList.
+# Return = 'return' Expr.
 def _return(parser):
     parser.track("_return")
-    _, err = parser.expect(lexkind.RETURN, "'return' keyword")
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.RETURN, "'return' keyword")
+    if res.failed():
+        return res
 
-    exprlist, err = parser.expect_prod(_expr_list, "expression list")
-    if err != None:
-        return None, err
+    res = parser.expect_prod(_expr, "expression")
+    if res.failed():
+        return res
+    expr = res.value
 
     n = Node(None, nodekind.RETURN)
-    n.leaves = [exprlist]
-    return n, None
+    n.leaves = [expr]
+    return Result(n, None)
 
 def _id(parser):
-    if parser.is_kind(lexkind.ID):
+    if parser.word_is(lexkind.ID):
         return parser.consume()
-    return None, None
+    return Result(None, None)
 
 # IdList = id {',' id} [','].
 def _id_list(parser):
     parser.track("_idlist")
-    list, err = parser.repeat_comma_list(_id)
-    if err != None:
-        return None, err
-    if list == None:
-        return None, None
+    res = parser.repeat_comma_list(_id)
+    if res.failed() or res.value == None:
+        return res
     n = Node(None, nodekind.ID_LIST)
-    n.leaves = list
-    return n, None
+    n.leaves = res.value
+    return Result(n, None)
 
 # FromImport = 'from' id 'import' IdList.
 def _from(parser):
     parser.track("_from")
-    _, err = parser.expect(lexkind.FROM, "'from' keyword")
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.FROM, "'from' keyword")
+    if res.failed():
+        return res
 
-    id, err = parser.expect(lexkind.ID, "identifier")
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.ID, "identifier")
+    if res.failed():
+        return res
+    id = res.value
 
-    _, err = parser.expect(lexkind.IMPORT, "'import' keyword")
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.IMPORT, "'import' keyword")
+    if res.failed():
+        return res
 
-    idlist, err = parser.expect_prod(_id_list, "identifier list")
-    if err != None:
-        return None, err
+    res = parser.expect_prod(_id_list, "identifier list")
+    if res.failed():
+        return res
+    idlist = res.value
 
     n = Node(None, nodekind.FROM_IMPORT)
     n.leaves = [id, idlist]
-    return n, None
+    return Result(n, None)
 
 # Import = 'import' IdList.
 def _import(parser):
     parser.track("_import")
-    _, err = parser.expect(lexkind.IMPORT, "'import' keyword")
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.IMPORT, "'import' keyword")
+    if res.failed():
+        return res
 
-    idlist, err = parser.expect_prod(_id_list, "identifier list")
-    if err != None:
-        return None, err
+    res = parser.expect_prod(_id_list, "identifier list")
+    if res.failed():
+        return res
+    idlist = res.value
 
     n = Node(None, nodekind.IMPORT)
     n.leaves = [idlist]
-    return n, None
+    return Result(n, None)
 
 # Class = 'class' id ':' NL >Methods.
 def _class(parser):
     parser.track("_class")
-    kw, err = parser.expect(lexkind.CLASS, "'class' keyword")
-    if err != None:
-        return None, err
-    id, err = parser.expect(lexkind.ID, "identifier")
-    if err != None:
-        return None, err
-    _, err = parser.expect(lexkind.COLON, "a colon ':'")
-    if err != None:
-        return None, err
-    _, err = _NL(parser)
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.CLASS, "'class' keyword")
+    if res.failed():
+        return res
+    kw = res.value
 
-    prev_indent = parser.indent
-    parser.indent = kw.value.start_column() + 1
-    methods, err = _methods(parser)
-    if err != None:
-        return None, err
-    parser.indent = prev_indent
+    res = parser.expect(lexkind.ID, "identifier")
+    if res.failed():
+        return res
+    id = res.value
+
+    res = parser.expect(lexkind.COLON, "a colon ':'")
+    if res.failed():
+        return res
+    res = _NL(parser)
+    if res.failed():
+        return res
+
+    res = parser.indent_prod(kw.value.start_column(), _methods)
+    if res.failed():
+        return res
+    methods = res.value
 
     n = Node(None, nodekind.CLASS)
     n.leaves = [id, methods]
-    return n, None
+    return Result(n, None)
 
 # Methods = {Func}.
 def _methods(parser):
     parser.track("_methods")
     methods = []
     if not parser.strict_indent():
-        return None, parser.error("invalid indentation")
+        err = parser.error("invalid indentation")
+        return Result(None, err)
 
     base_indent = parser.curr_indent()
     while base_indent == parser.curr_indent():
-        if not parser.is_kind(lexkind.DEF):
-            return None, parser.error("expected method")
-        f, err = _func(parser)
-        if err != None:
-            return None, err
-        if parser.is_kind(lexkind.NL):
-            _, err = _NL(parser)
-            if err != None:
-                return None, err
+        if not parser.word_is(lexkind.DEF):
+            err = parser.error("expected method")
+            return Result(None, err)
+        res = _func(parser)
+        if res.failed():
+            return res
+        f = res.value
+
+        if parser.word_is(lexkind.NL):
+            res = _NL(parser)
+            if res.failed():
+                return res
         methods += [f]
 
     n = Node(None, nodekind.METHODS)
     n.leaves = methods
-    return n, None
+    return Result(n, None)
 
 # Pass = 'pass'.
 def _pass(parser):
     parser.track("_pass")
-    if parser.is_kind(lexkind.PASS):
+    if parser.word_is(lexkind.PASS):
         return parser.consume()
-    return None, None
+    return Result(None, None)
 
 # Func = 'def' id Arguments ':' NL >Block.
 def _func(parser):
     parser.track("_func")
-    kw, err = parser.expect(lexkind.DEF, "'def' keyword")
-    if err != None:
-        return None, err
-    id, err = parser.expect(lexkind.ID, "identifier")
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.DEF, "'def' keyword")
+    if res.failed():
+        return res
+    kw = res.value
 
-    args, err = _arguments(parser)
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.ID, "identifier")
+    if res.failed():
+        return res
+    id = res.value
+
+    res = _arguments(parser)
+    if res.failed():
+        return res
+    args = res.value
     
-    _, err = parser.expect(lexkind.COLON, "a colon ':'")
-    if err != None:
-        return None, err
-    _, err = _NL(parser)
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.COLON, "a colon ':'")
+    if res.failed():
+        return res
+    res = _NL(parser)
+    if res.failed():
+        return res
 
-    prev_indent = parser.indent
-    parser.indent = kw.value.start_column() + 1
-    block, err = _block(parser)
-    if err != None:
-        return None, err
-    parser.indent = prev_indent
+    res = parser.indent_prod(kw.value.start_column(), _block)
+    if res.failed():
+        return res
+    block = res.value
 
     n = Node(None, nodekind.FUNC)
     n.leaves = [id, args, block]
-    return n, None
+    return Result(n, None)
 
 # Arguments = '(' [NL] [ArgList] ')'.
 def _arguments(parser):
     parser.track("_arguments")
-    _, err = parser.expect(lexkind.LEFT_PAREN, "left parenthesis '('")
-    if err != None:
-        return None, err
-    if parser.is_kind(lexkind.NL):
-        _, err = _NL(parser)
-        if err != None:
-            return None, err
-    args, err = _arg_list(parser)
-    if err != None:
-        return None, err
-    _, err = parser.expect(lexkind.RIGHT_PAREN, "right parenthesis ')'")
-    if err != None:
-        return None, err
-    return args, None
+    res  = parser.expect(lexkind.LEFT_PAREN, "left parenthesis '('")
+    if res.failed():
+        return res
+    if parser.word_is(lexkind.NL):
+        res = _NL(parser)
+        if res.failed():
+            return res
+    res = _arg_list(parser)
+    if res.failed():
+        return res
+    args = res.value
+
+    res = parser.expect(lexkind.RIGHT_PAREN, "right parenthesis ')'")
+    if res.failed():
+        return res
+    return Result(args, None)
 
 # ArgList = Arg {CommaNL Arg} [CommaNL].
 def _arg_list(parser):
     parser.track("_arg_list")
-    list, err = parser.repeat_multiline_comma_list(_arg)
-    if err != None:
-        return None, err
-    if list == None:
-        return None, None
+    res = parser.repeat_multiline_comma_list(_arg)
+    if res.failed() or res.value == None:
+        return res
     n = Node(None, nodekind.ARG_LIST)
-    n.leaves = list
-    return n, None
+    n.leaves = res.value
+    return Result(n, None)
 
 # Arg = 'self' | id.
 def _arg(parser):
-    if parser.is_kind(lexkind.SELF):
+    if parser.word_is(lexkind.SELF):
         return parser.consume()
-    elif parser.is_kind(lexkind.ID):
+    elif parser.word_is(lexkind.ID):
         return parser.consume()
     else:
-        return None, None
+        return Result(None, None)
 
 # Expr = And {'or' And}.
 def _expr(parser):
@@ -614,9 +649,11 @@ def _mult(parser):
 # UnaryPrefix = {Prefix} UnarySuffix.
 def _unary_prefix(parser):
     parser.track("_unary_prefix")
-    list, err = parser.repeat(_prefix)
-    if err != None:
-        return None, err
+
+    res = parser.repeat(_prefix)
+    if res.failed():
+        return res
+    list = res.value
 
     # prefixos precisam formar uma arvore de acordo com a precedencia
     if list != None:
@@ -626,44 +663,48 @@ def _unary_prefix(parser):
                 list[i].add_leaf(list[i+1])
             i+=1
 
-    other, err = _unary_suffix(parser)
-    if err != None:
-        return None, err
+    res = _unary_suffix(parser)
+    if res.failed():
+        return res
+    other = res.value
 
     if list != None and other == None:
-        return None, parser.error("invalid use of operator without term")
+        err = parser.error("invalid use of operator without term")
+        return Result(None, err)
 
     if list != None and len(list) > 0:
         first = list[0]
         last = list[len(list)-1]
         last.add_leaf(other)
-        return first, None
-    return other, None
+        return Result(first, None)
+    return Result(other, None)
 
 # prefix = 'not' | '-'.
 def _prefix(parser):
     parser.track("_prefix")
-    if parser.is_kinds([lexkind.NOT, lexkind.MINUS]):
-        n, err = parser.consume()
-        if err != None:
-            return None, err
+    if parser.word_is_one_of([lexkind.NOT, lexkind.MINUS]):
+        res = parser.consume()
+        if res.failed():
+            return res
+        n = res.value
         n.kind = nodekind.UNA_OPERATOR
-        return n, None
+        return Result(n, None)
     else:
-        return None, None
+        return Result(None, None)
 
 # UnarySuffix = Term {Suffix}.
 def _unary_suffix(parser):
     parser.track("_unary_suffix")
-    term, err = _term(parser)
-    if err != None:
-        return None, err
-    if term == None:
-        return None, None
 
-    list, err = parser.repeat(_suffix)
-    if err != None:
-        return None, err
+    res = _term(parser)
+    if res.failed() or res.value == None:
+        return res
+    term = res.value
+
+    res = parser.repeat(_suffix)
+    if res.failed():
+        return res
+    list = res.value
 
     if list != None:
         # sufixos precisam formar uma arvore de acordo com a precedencia
@@ -676,68 +717,73 @@ def _unary_suffix(parser):
             first = list[0]
             last = list[len(list)-1]
             first.add_leaf(term)
-            return last, None
-    return term, None
+            return Result(last, None)
+    return Result(term, None)
 
 # Suffix = Call
 #        | DotAccess
 #        | Index.
 def _suffix(parser):
     parser.track("_suffix")
-    if parser.is_kind(lexkind.LEFT_PAREN):
+    if parser.word_is(lexkind.LEFT_PAREN):
         return _call(parser)
-    elif parser.is_kind(lexkind.LEFT_BRACKET):
+    elif parser.word_is(lexkind.LEFT_BRACKET):
         return _index(parser)
-    elif parser.is_kind(lexkind.DOT):
+    elif parser.word_is(lexkind.DOT):
         return _dot_access(parser)
     else:
-        return None, None
+        return Result(None, None)
 
 # Call = '(' [NL] [MultiLine_ExprList] ')'.
 def _call(parser):
     parser.track("_call")
-    _, err = parser.expect(lexkind.LEFT_PAREN, "left parenthesis '('")
-    if err != None:
-        return None, err
-    if parser.is_kind(lexkind.NL):
-        _, err = _NL(parser)
-        if err != None:
-            return None, err
-    args, err = _multiline_expr_list(parser)
-    if err != None:
-        return None, err
-    _, err = parser.expect(lexkind.RIGHT_PAREN, "right parenthesis ')'")
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.LEFT_PAREN, "left parenthesis '('")
+    if res.failed():
+        return res
+    if parser.word_is(lexkind.NL):
+        res = _NL(parser)
+        if res.failed():
+            return res
+    res = _multiline_expr_list(parser)
+    if res.failed():
+        return res
+    args = res.value
+
+    res = parser.expect(lexkind.RIGHT_PAREN, "right parenthesis ')'")
+    if res.failed():
+        return res
     n = Node(None, nodekind.CALL)
     n.leaves = [args]
-    return n, None
+    return Result(n, None)
 
 # Index = '[' [NL] Expr [':' Expr] ']'.
 def _index(parser):
     parser.track("_index")
-    _, err = parser.expect(lexkind.LEFT_BRACKET, "lleft bracket '['")
-    if err != None:
-        return None, err
-    if parser.is_kind(lexkind.NL):
-        _, err = _NL(parser)
-        if err != None:
-            return None, err
-    expr_1, err = parser.expect_prod(_expr, "expression")
-    if err != None:
-        return None, err
-    expr_2 = None
-    if parser.is_kind(lexkind.COLON):
-        _, err = parser.consume()
-        if err != None:
-            return None, err
-        expr_2, err = parser.expect_prod(_expr, "expression")
-        if err != None:
-            return None, err
+    res = parser.expect(lexkind.LEFT_BRACKET, "lleft bracket '['")
+    if res.failed():
+        return res
+    if parser.word_is(lexkind.NL):
+        res = _NL(parser)
+        if res.failed():
+            return res
+    res = parser.expect_prod(_expr, "expression")
+    if res.failed():
+        return res
+    expr_1 = res.value
 
-    _, err = parser.expect(lexkind.RIGHT_BRACKET, "right bracket ']'")
-    if err != None:
-        return None, err
+    expr_2 = None
+    if parser.word_is(lexkind.COLON):
+        res = parser.consume()
+        if res.failed():
+            return res
+        res = parser.expect_prod(_expr, "expression")
+        if res.failed():
+            return res
+        expr_2 = res.value
+
+    res = parser.expect(lexkind.RIGHT_BRACKET, "right bracket ']'")
+    if res.failed():
+        return res
 
     n = None
     if expr_2 != None:
@@ -746,24 +792,25 @@ def _index(parser):
     else:
         n = Node(None, nodekind.INDEX)
         n.leaves = [expr_1]
-    return n, None
+    return Result(n, None)
 
 # DotAccess = '.' id.
 def _dot_access(parser):
     parser.track("_dot_access")
-    if not parser.is_kind(lexkind.DOT):
-        return None, None
+    if not parser.word_is(lexkind.DOT):
+        return Result(None, None)
 
-    _, err = parser.consume()
-    if err != None:
-        return None, err
-    id, err = parser.expect(lexkind.ID, "identifier")
-    if err != None:
-        return None, err
+    res = parser.consume()
+    if res.failed():
+        return res
+    res = parser.expect(lexkind.ID, "identifier")
+    if res.failed():
+        return res
+    id = res.value
 
     n = Node(None, nodekind.FIELD_ACCESS)
     n.leaves = [id]
-    return n, None
+    return Result(n, None)
 
 
 # Term = 'self' | 'None' | bool | num
@@ -771,7 +818,7 @@ def _dot_access(parser):
 #        | Dict | List.
 def _term(parser):
     parser.track("_term")
-    if parser.is_kinds([lexkind.SELF,
+    if parser.word_is_one_of([lexkind.SELF,
                         lexkind.NONE,
                         lexkind.TRUE,
                         lexkind.FALSE,
@@ -779,107 +826,104 @@ def _term(parser):
                         lexkind.STR,
                         lexkind.NUM]):
         return parser.consume()
-    elif parser.is_kind(lexkind.LEFT_BRACKET):
+    elif parser.word_is(lexkind.LEFT_BRACKET):
         return _list(parser)
-    elif parser.is_kind(lexkind.LEFT_BRACE):
+    elif parser.word_is(lexkind.LEFT_BRACE):
         return _dict(parser)
-    elif parser.is_kind(lexkind.LEFT_PAREN):
-        return _nested_expr_tuple(parser)
+    elif parser.word_is(lexkind.LEFT_PAREN):
+        return _nested_expr(parser)
     else:
-        return None, None
+        return Result(None, None)
 
 # Dict = '{' [NL] KeyValue_List '}'.
 def _dict(parser):
-    _, err = parser.expect(lexkind.LEFT_BRACE, "left brace '{'")
-    if err != None:
-        return None, err
-    if parser.is_kind(lexkind.NL):
-        _, err = _NL(parser)
-        if err != None:
-            return None, err
-    kvlist, err = _key_value_list(parser)
-    if err != None:
-        return None, err
-    _, err = parser.expect(lexkind.RIGHT_BRACE, "right brace '}'")
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.LEFT_BRACE, "left brace '{'")
+    if res.failed():
+        return res
+    if parser.word_is(lexkind.NL):
+        res = _NL(parser)
+        if res.failed():
+            return res
+    res = _key_value_list(parser)
+    if res.failed():
+        return res
+    kvlist = res.value
+
+    res = parser.expect(lexkind.RIGHT_BRACE, "right brace '}'")
+    if res.failed():
+        return res
+
     n = Node(None, nodekind.DICT)
     n.leaves = [kvlist]
-    return n, None
+    return Result(n, None)
 
 # KeyValue_List = KeyValue_Expr {CommaNL KeyValue_Expr} [CommaNL].
 def _key_value_list(parser):
-    kv_list, err = parser.repeat_multiline_comma_list(_key_value_expr)
-    if err != None:
-        return None, err
-    if kv_list == None:
-        return None, None
+    res = parser.repeat_multiline_comma_list(_key_value_expr)
+    if res.failed() or res.value == None:
+        return res
     n = Node(None, nodekind.KEY_VALUE_LIST)
-    n.leaves = kv_list
-    return n, None
+    n.leaves = res.value
+    return Result(n, None)
 
 # KeyValue_Expr = Expr [':' Expr].
 def _key_value_expr(parser):
-    key, err = _expr(parser)
-    if err != None:
-        return None, err
-    if key == None:
-        return None, None
-    if parser.is_kind(lexkind.COLON):
-        _, err = parser.consume()
-        if err != None:
-            return None, err
+    res = _expr(parser)
+    if res.failed() or res.value == None:
+        return res
+    key = res.value
 
-        value, err = parser.expect_prod(_expr, "expression")
-        if err != None:
-            return None, err
+    if parser.word_is(lexkind.COLON):
+        res = parser.consume()
+        if res.failed():
+            return res
+
+        res = parser.expect_prod(_expr, "expression")
+        if res.failed():
+            return res
+        value = res.value
+
         n = Node(None, nodekind.KEY_VALUE_PAIR)
         n.leaves = [key, value]
-        return n, None
-    return key, None
+        return Result(n, None)
+    return Result(key, None)
 
 # List = '[' [NL] MultiLine_ExprList ']'.
 def _list(parser):
-    _, err = parser.expect(lexkind.LEFT_BRACKET, "left bracket '['")
-    if err != None:
-        return None, err
-    if parser.is_kind(lexkind.NL):
-        _, err = _NL(parser)
-        if err != None:
-            return None, err
-    expr_list, err = _multiline_expr_list(parser)
-    if err != None:
-        return None, err
-    _, err = parser.expect(lexkind.RIGHT_BRACKET, "right bracket ']'")
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.LEFT_BRACKET, "left bracket '['")
+    if res.failed():
+        return res
+    if parser.word_is(lexkind.NL):
+        res = _NL(parser)
+        if res.failed():
+            return res
+    res = _multiline_expr_list(parser)
+    if res.failed():
+        return res
+    expr_list = res.value
+    res = parser.expect(lexkind.RIGHT_BRACKET, "right bracket ']'")
+    if res.failed():
+        return res
     n = Node(None, nodekind.LIST)
     n.leaves = [expr_list]
-    return n, None
+    return Result(n, None)
 
-# NestedExpr_Tuple = '(' [NL] MultiLine_ExprList ')'.
-def _nested_expr_tuple(parser):
-    _, err = parser.expect(lexkind.LEFT_PAREN, "left parenthesis '('")
-    if err != None:
-        return None, err
-    if parser.is_kind(lexkind.NL):
-        _, err = _NL(parser)
-        if err != None:
-            return None, err
-    expr_list, err = _multiline_expr_list(parser)
-    if err != None:
-        return None, err
-    _, err = parser.expect(lexkind.RIGHT_PAREN, "right parenthesis ')'")
-    if err != None:
-        return None, err
+# NestedExpr = '(' Expr ')'.
+def _nested_expr(parser):
+    res = parser.expect(lexkind.LEFT_PAREN, "left parenthesis '('")
+    if res.failed():
+        return res
 
-    if len(expr_list.leaves) == 1:
-        n = expr_list.leaves[0]
-        return n, None
-    else:
-        n = Node(None, nodekind.TUPLE)
-        n.leaves = [expr_list]
-        return n, None
+    res = parser.expect_prod(_expr, "expression")
+    if res.failed():
+        return res
+    expr = res.value
+
+    res = parser.expect(lexkind.RIGHT_PAREN, "right parenthesis ')'")
+    if res.failed():
+        return res
+
+    return Result(expr, None)
 
 # compOp = '==' | '!=' | '>' | '>=' | '<' | '<=' | 'in'.
 def _comp_op(parser):
@@ -892,36 +936,36 @@ def _comp_op(parser):
         lexkind.LESS,
         lexkind.LESS_OR_EQUALS,
     ]
-    return parser.is_kinds(kinds)
+    return parser.word_is_one_of(kinds)
 
 def _and_op(parser):
-    return parser.is_kinds([lexkind.AND])
+    return parser.word_is_one_of([lexkind.AND])
 
 def _or_op(parser):
-    return parser.is_kinds([lexkind.OR])
+    return parser.word_is_one_of([lexkind.OR])
 
 # sumOp = '+' | '-'.
 def _sum_op(parser):
-    return parser.is_kinds([lexkind.PLUS, lexkind.MINUS])
+    return parser.word_is_one_of([lexkind.PLUS, lexkind.MINUS])
 
 # multOp = '*' | '/' | '%'.
 def _mult_op(parser):
-    return parser.is_kinds([lexkind.MULT, lexkind.DIV, lexkind.REM])
+    return parser.word_is_one_of([lexkind.MULT, lexkind.DIV, lexkind.REM])
 
 # NL = nl {nl}.
 def _NL(parser):
-    _, err = parser.expect(lexkind.NL, "line break")
-    if err != None:
-        return None, err
+    res = parser.expect(lexkind.NL, "line break")
+    if res.failed():
+        return res
     _discard_nl(parser)
-    return None, None
+    return Result(None, None)
 
 def _discard_nl(parser):
-    while parser.is_kind(lexkind.NL):
+    while parser.word_is(lexkind.NL):
         parser.consume()
 
 # CommaNL = ',' [NL].
 def _comma_nl(parser):
-    if parser.is_kind(lexkind.COMMA):
+    if parser.word_is(lexkind.COMMA):
         parser.consume()
         _discard_nl(parser)

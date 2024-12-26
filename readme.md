@@ -37,7 +37,7 @@ Else = 'else' ':' NL >Block.
 
 Atrib_Expr = Expr [Assign_Op Expr].
 
-Return = 'return' ExprList.
+Return = 'return' Expr.
 
 Class = 'class' id ':' NL >Methods.
 Methods = {Func}.
@@ -62,7 +62,7 @@ multOp = '*' | '/' | '%'.
 UnaryPrefix = {Prefix} UnarySuffix.
 UnarySuffix = Term {Suffix}.
 Term = 'self' | 'None' | bool | num
-       | str  | id     | NestedExpr_Tuple
+       | str  | id     | NestedExpr
        | Dict | List.
 
 prefix = 'not' | '-'.
@@ -78,7 +78,7 @@ Dict = '{' [NL] KeyValue_List '}'.
 KeyValue_List = KeyValue_Expr {CommaNL KeyValue_Expr} [CommaNL].
 KeyValue_Expr = Expr [':' Expr].
 
-NestedExpr_Tuple = '(' [NL] MultiLine_ExprList ')'.
+NestedExpr = '(' Expr ')'.
 
 Assign_Op = '=' | '+=' | '-=' | '*=' | '/=' | '%='.
 

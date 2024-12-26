@@ -13,11 +13,9 @@ ELIF = 11           # [exp, block]
 ELSE = 12           # [block]
 CLASS = 13          # [id, methods]
 METHODS = 14        # [method_1, method_2, ...]
-TUPLE = 15          # [expr_list]
 BIN_OPERATOR = 16   # [left_op, right_op]
 ASSIGN = 17          # [lhs_expr, rhs_expr]
 AUGMENTED_ASSIGN = 18 # [lhs_expr, rhs_expr]
-MULTI_ASSIGN = 19   # [lhs_expr_list, rhs_expr]
 SLICE = 20          # [expr_1, expr_2, operand_expr]
 FIELD_ACCESS = 21   # [field, operand_expr]
 FUNC = 22           # [id, args, block]
@@ -28,7 +26,7 @@ INDEX = 26          # [expr_1, operand_expr]
 KEY_VALUE_PAIR = 27 # [key, value]
 ELIF_LIST = 28      # [elif1, elif2, ...]
 UNA_OPERATOR = 29   # [operand]
-RETURN = 30         # [expr_list]
+RETURN = 30         # [expr]
 
 def to_str(kind):
     if kind == INVALID: 
@@ -61,8 +59,6 @@ def to_str(kind):
         return "CLASS"
     elif kind == METHODS: 
         return "METHODS"
-    elif kind == TUPLE: 
-        return "TUPLE"
     elif kind == BIN_OPERATOR: 
         return "BIN_OPERATOR"
     elif kind == UNA_OPERATOR: 
@@ -71,8 +67,6 @@ def to_str(kind):
         return "ASSIGN"
     elif kind == AUGMENTED_ASSIGN: 
         return "AUGMENTED_ASSIGN"
-    elif kind == MULTI_ASSIGN: 
-        return "MULTI_ASSIGN"
     elif kind == SLICE: 
         return "SLICE"
     elif kind == FIELD_ACCESS:
