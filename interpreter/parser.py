@@ -21,7 +21,7 @@ def parse(string, track):
 class _Parser:
     def __init__(self, lexer):
         self.lexer = lexer
-        self.indent = -1 # numero de espaços, começa em -1 por gambiarra
+        self.indent = 0 # numero de espaços
         self.is_tracking = False
         lexer.next() # precisamos popular lexer.word
 
@@ -166,6 +166,11 @@ class _Parser:
     def indent_prod(self, base_indent, production):
         prev_indent = self.indent
         self.indent = base_indent + 1
+
+        if not self.strict_indent():
+            err = self.error("invalid indentation")
+            return Result(None, err)
+
         res = production(self)
         if res.failed():
             return res
@@ -181,9 +186,6 @@ class _Parser:
 def _block(parser):
     parser.track("_block")
     statements = []
-    if not parser.strict_indent():
-        err = parser.error("invalid indentation")
-        return Result(None, err)
 
     base_indent = parser.curr_indent()
     while base_indent == parser.curr_indent() and not parser.word_is(lexkind.EOF):
@@ -517,9 +519,6 @@ def _class(parser):
 def _methods(parser):
     parser.track("_methods")
     methods = []
-    if not parser.strict_indent():
-        err = parser.error("invalid indentation")
-        return Result(None, err)
 
     base_indent = parser.curr_indent()
     while base_indent == parser.curr_indent():

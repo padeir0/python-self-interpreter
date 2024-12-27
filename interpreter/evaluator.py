@@ -8,7 +8,8 @@ import scopekind
 # Considerations:
 # - All built-in functions must be implemented using CPython's built-in functions.
 # - `print` takes a single argument (no varags) and uses __str__ method if present
-# - to iterate on maps, use the map.items() method
+
+# TODO: treat map.items() as a special case in the _eval_call procedure
 
 class _Builtin_Func:
     def __init__(self, num_args, function):
@@ -28,21 +29,27 @@ class _Builtin_Func:
         return None
 
 class _User_Function:
-    def __init__(self, name, block, formal_args):
+    def __init__(self, name, block, formal_args, parent_scope):
         self.name = name
         self.block = block
         # lista dos nomes dos argumentos
         self.formal_args = formal_args
+        # toda função captura o ambiente que ela ta inserida,
+        # ie, é uma closure
+        self.parent_scope = parent_scope
+
     def call(self, ctx, args):
-        ctx.push_env(scopekind.FUNCTION)
         if len(args) != len(self.formal_args):
             return Error("invalid number of arguments")
+
+        s = _Scope(self.parent_scope, scopekind.FUNCTION)
+        ctx.push_env(s)
 
         i = 0
         while i < len(args):
             name = self.formal_args[i]
             obj = args[i]
-            ctx.add_symbol(name, obj)
+            s.add_symbol(name, obj)
             i += 1
 
         err = eval_block(ctx, self.block)
@@ -52,19 +59,10 @@ class _User_Function:
         ctx.pop_env()
         return None
     
-class _User_Method:
-    def __init__(self, node, formal_args):
-        self.node = node
-        self.formal_args = formal_args
-        self.num_args = len(formal_args)
-
-    def call(self, ctx, instance, args):
-        # passa 'self' como um identificador no ambiente
-        pass
-
 class _User_Object_Template:
-    def __init__(self, node):
+    def __init__(self, node, scope):
         self.node = node
+        self.scope = scope
 
 class _User_Object_Instance:
     def __init__(self, template):
@@ -86,9 +84,42 @@ class _Module:
         self.scope = mod_scope
 
 class _Py_Object:
-    def __init__(self, kind, value):
+    def __init__(self, kind, value, mutable):
         self.kind = kind
         self.value = value
+        self.mutable = mutable
+    def copy(self):
+        value = self.value
+        # if self.kind == objkind.NUM:
+        #     value = self.value + 0
+        # elif self.kind == objkind.STR:
+        #     value = self.value + ""
+        # elif self.kind == objkind.MAP:
+        #     value = copy_map(self.value)
+        # elif self.kind == objkind.LIST:
+        #     value = copy_list(self.value)
+        # elif self.kind == objkind.USER_METHOD:
+        #     value = self.value
+        # elif self.kind == objkind.USER_FUNCTION:
+        #     value = self.value
+        # elif self.kind == objkind.USER_OBJECT:
+        #     value = self.value
+        # elif self.kind == objkind.MODULE:
+        #     value = self.value
+        # elif self.kind == objkind.BUILTIN_FUNC::
+        #     value = self.value
+        return _Py_Object(self.kind, value, self.mutable)
+    def is_kind(self, kind):
+        return self.kind == kind
+    def is_kinds(self, kinds):
+        i = 0
+        while i < len(kinds):
+            if self.kind == kinds[i]:
+                return True
+            i += 1
+        return False
+    def set(self, obj):
+        self.value = obj.value
 
 class _Scope:
     def __init__(self, parent, kind):
@@ -137,13 +168,14 @@ class _Call_Node:
         self.parent = parent
 
 class _Context:
-    def __init__(self, source_map, call_node):
+    def __init__(self, source_map, call_node, builtin_scope):
+        self.builtin_scope = builtin_scope
         self.source_map = source_map
         self.curr_call_node = call_node
+        self.evaluated_mods = {}
 
-    def push_env(self, kind):
-        s = _Scope(self.curr_call_node.curr_scope, kind)
-        next = _Call_Node(self.curr_call_node, s)
+    def push_env(self, scope):
+        next = _Call_Node(self.curr_call_node, scope)
         self.curr_call_node = next
 
     def pop_env(self):
@@ -151,6 +183,9 @@ class _Context:
 
     def curr_scope(self):
         return self.curr_call_node.curr_scope
+
+    def retrieve(self, name):
+        return self.curr_call_node.curr_scope.retrieve(name)
 
     def add_symbol(self, name, obj):
         self.curr_call_node.curr_scope.add_symbol(name, obj)
@@ -161,90 +196,96 @@ class _Context:
     def set_symbol(self, name, obj):
         return self.curr_call_node.curr_scope.set_symbol(name, obj):
 
-def _bin_operator(ctx, node):
+    def set_mod(self, mod_name, mod):
+        self.evaluated_mods[mod_name] = mod
+
+    def get_mod(self, mod_name):
+        if mod_name in self.evaluated_mods:
+            return self.evaluated_mods[mod_name]
+        return None
+
+def _eval_bin_operator(ctx, node):
     pass
 
-def _una_operator(ctx, node):
+def _eval_una_operator(ctx, node):
     pass
 
-def _terminal(ctx, node):
+def _eval_terminal(ctx, node):
     pass
 
-def _dict(ctx, node):
+def _eval_dict(ctx, node):
     pass
 
-def _list(ctx, node):
+def _eval_list(ctx, node):
     pass
 
-def _call(ctx, node):
+def _eval_call(ctx, node):
     pass
 
-def _index(ctx, node):
+def _eval_index(ctx, node):
     pass
 
-def _field_access(ctx, node):
+def _eval_field_access(ctx, node):
     pass
 
-def _slice(ctx, node):
+def _eval_slice(ctx, node):
     pass
 
-def eval_expr(ctx, node):
+def _eval_expr(ctx, node):
     if node.kind == nodekind.BIN_OPERATOR:
-        return _bin_operator(ctx, node)
+        return _eval_bin_operator(ctx, node)
     elif node.kind == nodekind.UNA_OPERATOR:
-        return _una_operator(ctx, node)
+        return _eval_una_operator(ctx, node)
     elif node.kind == nodekind.TERMINAL:
-        return _terminal(ctx, node)
+        return _eval_terminal(ctx, node)
     elif node.kind == nodekind.DICT:
-        return _dict(ctx, node)
+        return _eval_dict(ctx, node)
     elif node.kind == nodekind.LIST:
-        return _list(ctx, node)
+        return _eval_list(ctx, node)
     elif node.kind == nodekind.CALL:
-        return _call(ctx, node)
+        return _eval_call(ctx, node)
     elif node.kind == nodekind.INDEX:
-        return _index(ctx, node)
+        return _eval_index(ctx, node)
     elif node.kind == nodekind.FIELD_ACCESS:
-        return _field_access(ctx, node)
+        return _eval_field_access(ctx, node)
     elif node.kind == nodekind.SLICE:
-        return _slice(ctx, node)
+        return _eval_slice(ctx, node)
     else:
         err = Error("invalid expression", node.range.copy())
         return Result(None, err)
 
-def _exprlist_sttm(ctx, node):
-    i = 0
-    while i < len(node.leaves):
-        leaf = node.leaves[i]
-        res = _eval_expr(ctx, leaf)
-        if res.failed():
-            return res.error
-        i += 1
-    return None
-
-# begin
-def _import(ctx, node):
+def _eval_import(ctx, node):
     i = 0
     while i < len(node.leaves):
         leaf = node.leaves[i]
         name = leaf.value.text
-        res = eval_module(ctx, name)
-        if res.failed():
-            return res.error()
-        mod = res.value
-        obj = _Py_Object(mod, objkind.MODULE)
-        ctx.add_symbol(name, obj)
+
+        mod = ctx.get_mod()
+        if mod == None:
+            res = eval_module(ctx, name)
+            if res.failed():
+                return res.error()
+            mod = res.value
+            obj = _Py_Object(mod, objkind.MODULE, False)
+            ctx.add_symbol(name, obj)
+            ctx.set_mod(name, mod)
+        else:
+            obj = _Py_Object(mod, objkind.MODULE, False)
+            ctx.add_symbol(name, obj)
         i += 1
     return None
 
-def _from(ctx, node):
+def _eval_from(ctx, node):
     id = node.leaves[0]
     idlist = node.leaves[1]
 
     name = id.value.text
-    res = eval_module(ctx, name)
-    if res.failed():
-        return res.error
-    mod = res.value
+    mod = ctx.get_mod(name)
+    if mod == None:
+        res = _eval_module(ctx, name)
+        if res.failed():
+            return res.error
+        mod = res.value
 
     i = 0
     while i < len(idlist.leaves):
@@ -252,13 +293,15 @@ def _from(ctx, node):
         name = leaf.value.text
         if mod.scope.contains(name):
             res = mod.scope.retrieve(name)
-            ctx.add_symbol(name, res.value)
+            cpy = res.value.copy()
+            cpy.mutable = False
+            ctx.add_symbol(name, cpy)
         else:
             return Error("symbol not found in module", leaf.range.copy())
         i += 1
     return None
 
-def extract_names(arg_list):
+def _extract_names(arg_list):
     i = 0
     out = []
     while i < len(arg_list):
@@ -274,70 +317,141 @@ def _def(ctx, node):
     block = node.leaves[2]
 
     name = id.value.text
-    arg_names = extract_names(args.leaves)
+    arg_names = _extract_names(args.leaves)
 
-    func = _User_Function(name, arg_names, block)
+    func = _User_Function(name, arg_names, block, ctx.curr_scope())
     ctx.add_symbol(name, func)
     return None
 
-def _assign(ctx, node):
+def _eval_lhs_index(ctx, lhs):
+    list = lhs.leaves[1]
+    index_expr = lhs.leaves[0]
+
+    res = _eval_expr(ctx, list)
+    if res.failed():
+        return res
+    obj = res.value
+
+    if not obj.mutable:
+        err = Error("object is not mutable", list.range.copy())
+        return Result(None, err)
+
+    res = _eval_expr(ctx, index_expr)
+    if res.failed():
+        return res
+    index_val = res.value
+
+    out = None
+    if obj.is_kind(objkind.MAP):
+        out = obj.value[index_val.value]
+    elif obj.is_kind(objkind.LIST) and index_val.is_kind(objkind.NUM):
+        out = obj.value[index_val.value]
+    else:
+        err = Error("invalid indexing expression", lhs.range.copy())
+        return Result(None, err)
+
+    if not out.mutable:
+        err = Error("object is not mutable", lhs.range.copy())
+        return Result(None, err)
+
+    return Result(out, None)
+
+def _eval_lhs_field_access(ctx, lhs):
     pass
+
+# O lado esquerdo deve obedecer uma semantica mais estrita que o direito,
+# por necessitar ter um objeto atribuivel.
+# A função eval_lhs retorna um _Py_Object, esse, por ser passado por
+# referência, pode ser atribuido futuramente.
+def _eval_lhs(ctx, lhs):
+    if lhs.kind == nodekind.TERMINAL and lhs.value.kind == nodekind.ID:
+        name = lhs.value.text
+        res = ctx.retrieve(name)
+        if res.failed():
+            return res
+        obj = res.value
+        return Result(obj, None)
+    elif lhs.kind == nodekind.INDEX:
+        return _eval_lhs_index(ctx, lhs)
+    elif lhs.kind == nodekind.FIELD_ACCESS:
+        return _eval_lhs_field_access(ctx, lhs)
+    else:
+        err = Error("expression is not assignable", lhs.range.copy())
+        return Result(None, err)
+
+def _eval_assign(ctx, node):
+    lhs = node.leaves[0]
+    rhs = node.leaves[1]
+
+    res = _eval_lhs(ctx, lhs)
+    if res.failed():
+        return res
+    obj = res.value
+
+    res = _eval_expr(ctx, rhs)
+    if res.failed():
+        return res
+    exp = res.value
+
+    obj.set(exp)
+    return Result(None, None)
+
 # end
 
-def _aug_assign(ctx, node):
+def _eval_aug_assign(ctx, node):
     pass
 
-def _while(ctx, node):
+def _eval_while(ctx, node):
     pass
 
-def _if(ctx, node):
+def _eval_if(ctx, node):
     pass
 
-def _return(ctx, node):
+def _eval_return(ctx, node):
     pass
 
-def _declare_class(ctx, node):
+def _eval_declare_class(ctx, node):
     pass
 
-def eval_sttm(ctx, node):
+def _eval_sttm(ctx, node):
     if node.kind == nodekind.EXPR:
-        return _expr_sttm(ctx, node)
+        return _eval_expr_sttm(ctx, node)
     elif node.kind == nodekind.IMPORT:
-        return _import(ctx, node)
+        return _eval_import(ctx, node)
     elif node.kind == nodekind.FROM:
-        return _from(ctx, node)
+        return _eval_from(ctx, node)
     elif node.kind == nodekind.DEF:
-        return _def(ctx, node)
+        return _eval_def(ctx, node)
     elif node.kind == nodekind.ASSIGN:
-        return _assign(ctx, node)
+        return _eval_assign(ctx, node)
     elif node.kind == nodekind.MULTI_ASSIGN:
-        return _multi_assign(ctx, node)
+        return _eval_multi_assign(ctx, node)
     elif node.kind == nodekind.AUGMENTED_ASSIGN:
-        return _aug_assign(ctx, node)
+        return _eval_aug_assign(ctx, node)
     elif node.kind == nodekind.WHILE:
-        return _while(ctx, node)
+        return _eval_while(ctx, node)
     elif node.kind == nodekind.IF:
-        return _if(ctx, node)
+        return _eval_if(ctx, node)
     elif node.kind == nodekind.RETURN:
-        return _return(ctx, node)
+        return _eval_return(ctx, node)
     elif node.kind == nodekind.CLASS:
-        return _declare_class(ctx, node)
+        return _eval_declare_class(ctx, node)
     elif node.kind == nodekind.PASS:
         return None
     else:
         return Error("invalid statement", node.range.copy())
 
-def eval_block(ctx, node):
+def _eval_block(ctx, node):
     i = 0
     while i < len(node.leaves):
         sttm = node.leaves[i]
-        err = eval_sttm(ctx, sttm)
+        err = _eval_sttm(ctx, sttm)
         if err != None:
             return err
         i += 1
     return None
 
-def eval_module(ctx, name):
+def _eval_module(ctx, name):
     if not name in ctx.source_map:
         err = Error("module '"+name+"' not found", leaf.range.copy())
         return Result(None, err)
@@ -351,17 +465,18 @@ def eval_module(ctx, name):
         err = Error("expected root node to be a _block", None)
         return Result(None, err)
 
-    ctx.push_env(scopekind.MODULE)
-    module = _Module(name, ctx.curr_scope())
+    s = _Scope(ctx.builtin_scope, scopekind.MODULE)
+    ctx.push_env(s)
+    module = _Module(name, s)
 
-    err = eval_block(ctx, n)
+    err = _eval_block(ctx, n)
     if err != None:
         return Result(None, err)
 
     ctx.pop_env()
     return Result(module, None)
     
-def create_builtin_scope():
+def _create_builtin_scope():
     s = _Scope(None, scopekind.BUILTIN)
     p = _Builtin_Func(1, print)
     s.add_symbol("print", p)
@@ -371,10 +486,10 @@ def evaluate(module_map, entry_name):
     if not entry_name in module_map:
         return Error("entry module not in module map", None)
 
-    s = create_builtin_scope()
+    s = _create_builtin_scope()
     node = _Call_Node(None, s)
-    ctx = _Context(module_map, node)
+    ctx = _Context(module_map, node, s)
     source = module_map[entry_name]
-    res = eval_module(ctx, source)
+    res = _eval_module(ctx, source)
     return res.error
 
