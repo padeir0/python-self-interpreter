@@ -67,6 +67,8 @@ class _User_Object_Template:
 class _User_Object_Instance:
     def __init__(self, template):
         self.template = template
+        # dicionario de tipo str->_Py_Object que contém as propriedades
+        # do objeto
         self.value = None
 
     # preenche self.value usando a logica do __init__ criado pelo usuario
@@ -75,8 +77,16 @@ class _User_Object_Instance:
         pass
 
     # retorna um atributo do objeto
-    def get_attr(self, ctx, method_name, args):
-        pass
+    def get_attr(self, attr_name):
+        if attr_name in self.value:
+            return Result(self.value[attr_name], None)
+        else:
+            return Result(None, True)
+
+    def get_create_attr(self, attr_name):
+        if not attr_name in self.value:
+            self.value[attr_name] = _Py_Object(objkind.NONE, None, false)
+        return self.value[attr_name]
 
 class _Module:
     def __init__(self, name, mod_scope):
@@ -90,24 +100,6 @@ class _Py_Object:
         self.mutable = mutable
     def copy(self):
         value = self.value
-        # if self.kind == objkind.NUM:
-        #     value = self.value + 0
-        # elif self.kind == objkind.STR:
-        #     value = self.value + ""
-        # elif self.kind == objkind.MAP:
-        #     value = copy_map(self.value)
-        # elif self.kind == objkind.LIST:
-        #     value = copy_list(self.value)
-        # elif self.kind == objkind.USER_METHOD:
-        #     value = self.value
-        # elif self.kind == objkind.USER_FUNCTION:
-        #     value = self.value
-        # elif self.kind == objkind.USER_OBJECT:
-        #     value = self.value
-        # elif self.kind == objkind.MODULE:
-        #     value = self.value
-        # elif self.kind == objkind.BUILTIN_FUNC::
-        #     value = self.value
         return _Py_Object(self.kind, value, self.mutable)
     def is_kind(self, kind):
         return self.kind == kind
@@ -357,7 +349,35 @@ def _eval_lhs_index(ctx, lhs):
     return Result(out, None)
 
 def _eval_lhs_field_access(ctx, lhs):
-    pass
+    op = lhs.leaves[1]
+    field = lhs.leaves[0]
+
+    if field.kind != nodekind.TERMINAL or field.value != lexkind.ID:
+        err = Error("field must be an identifier", field.range.copy())
+        return Result(None, err)
+
+    res = _eval_expr(ctx, op)
+    if res.failed():
+        return res
+    obj = res.value
+
+    if obj.is_kinds([objkind.STR, objkind.DICT, objkind.NUM,
+                     objkind.LIST, objkind.USER_METHOD, objkind.USER_FUNCTION,
+                     objkind.BUILTIN_FUNC]):
+        err = Error("object has no methods", obj.range.copy())
+        return Result(None, err)
+
+    if obj.is_kinds([objkind.MODULE]):
+        err = Error("object is not mutable", lhs.range.copy())
+        return Result(None, err)
+
+    if obj.is_kind([objkind.USER_OBJECT]):
+        name = field.value.text
+        obj = obj.value.get_create_attr(name)
+        return Result(obj, None)
+    else:
+        err = Error("object has invalid type", obj.range.copy())
+        return Result(None, err)
 
 # O lado esquerdo deve obedecer uma semantica mais estrita que o direito,
 # por necessitar ter um objeto atribuivel.
@@ -395,8 +415,6 @@ def _eval_assign(ctx, node):
 
     obj.set(exp)
     return Result(None, None)
-
-# end
 
 def _eval_aug_assign(ctx, node):
     pass

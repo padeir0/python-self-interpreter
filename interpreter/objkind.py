@@ -8,3 +8,4 @@ USER_METHOD   = 5
 USER_FUNCTION = 6
 MODULE        = 7
 BUILTIN_FUNC  = 8
+NONE          = 9
