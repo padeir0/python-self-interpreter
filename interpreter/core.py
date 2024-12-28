@@ -109,6 +109,9 @@ class Node:
     def right(self):
         return self.leaves[1]
 
+    def has_lexkind(self, kind):
+        return self.value.kind == kind
+
     def compute_range(self):
         if self.kind == nodekind.TERMINAL:
             self.range = self.value.range.copy()

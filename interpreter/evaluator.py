@@ -9,8 +9,6 @@ import scopekind
 # - All built-in functions must be implemented using CPython's built-in functions.
 # - `print` takes a single argument (no varags) and uses __str__ method if present
 
-# TODO: treat map.items() as a special case in the _eval_call procedure
-
 class _Builtin_Func:
     def __init__(self, num_args, function):
         self.num_args = num_args
@@ -28,6 +26,8 @@ class _Builtin_Func:
             return Error("too many arguments", None)
         return None
 
+# implementamos métodos passando um escopo onde o "self"
+# é uma variável respresentando a instancia do objeto
 class _User_Function:
     def __init__(self, name, block, formal_args, parent_scope):
         self.name = name
@@ -74,6 +74,7 @@ class _User_Object_Instance:
     # preenche self.value usando a logica do __init__ criado pelo usuario
     # emitir um erro se não existir __init__
     def eval_init(self, args):
+        # TODO: implement evaling __init__
         pass
 
     # retorna um atributo do objeto
@@ -92,6 +93,13 @@ class _Module:
     def __init__(self, name, mod_scope):
         self.name = name
         self.scope = mod_scope
+
+    def get_global(self, name):
+        if self.scope.contains(name):
+            return self.scope.retrieve(name)
+        err = Error("name '"+name+"' is not part of module"+self.name, None)
+        return Result(None, err)
+        
 
 class _Py_Object:
     def __init__(self, kind, value, mutable):
@@ -196,31 +204,213 @@ class _Context:
             return self.evaluated_mods[mod_name]
         return None
 
+    def get_return(self):
+        return self.curr_call_node.return_obj
+
 def _eval_bin_operator(ctx, node):
+    # TODO: implement binary operators
     pass
 
 def _eval_una_operator(ctx, node):
-    pass
+    operand = node.leaves[0]
+    res = _eval_expr(ctx, operand)
+    if res.failed():
+        return res
+    obj = res.value
+    if node.has_lexkind(lexkind.NOT):
+        if obj.is_kind(objkind.BOOL):
+            new_value = not obj.value
+            obj = _Py_Object(objkind.BOOL, new_value, false)
+            return Result(obj, None)
+        else:
+            err = Error("object is not a boolean", operand.range.copy())
+            return Result(None, err)
+    elif node.has_lexkind(lexkind.MINUS):
+        if obj.is_kind(objkind.NUM):
+            new_value = -obj.value
+            obj = _Py_Object(objkind.NUM, new_value, false)
+            return Result(obj, None)
+        else:
+            err = Error("object is not a number", operand.range.copy())
+            return Result(None, err)
+    else:
+        err = Error("invalid lexkind for unary operator", node.range.copy())
+        return Result(None, err)
 
 def _eval_terminal(ctx, node):
-    pass
+    obj = None
+    if node.has_lexkind(lexkind.TRUE):
+        obj = _Py_Object(objkind.BOOL, True, false)
+    elif node.has_lexkind(lexkind.FALSE):
+        obj = _Py_Object(objkind.BOOL, False, false)
+    elif node.has_lexkind(lexkind.NONE):
+        obj = _Py_Object(objkind.NONE, None, false)
+    elif node.has_lexkind(lexkind.ID):
+        name = node.value.text
+        res = ctx.retrieve(name)
+        if res.failed():
+            err = res.error
+            err.range = node.range.copy()
+            return Result(None, err)
+        obj = res.value
+    elif node.has_lexkind(lexkind.STR):
+        obj = _Py_Object(objkind.STR, node.value.text, false)
+    elif node.has_lexkind(lexkind.NUM):
+        obj = _Py_Object(objkind.NUM, int(node.value.text), false)
+    else:
+        err = Error("invalid lexkind for terminal", node.range.copy())
+        return Result(None, err)
+    return Result(obj, None)
 
 def _eval_dict(ctx, node):
-    pass
+    kvlist = node.leaves[0]
+    i = 0
+    out = {}
+    while i < len(kvlist.leaves):
+        kvpair = kvlist.leaves[i]
+        key_expr = kvpair.leaves[0]
+        value_expr = kvpair.leaves[1]
+
+        res = _eval_expr(ctx, key_expr)
+        if res.failed():
+            return res
+        key = res.value
+
+        res = _eval_expr(ctx, value_expr)
+        if res.failed():
+            return res
+        value = res.value
+
+        # TODO: properly check the type of the key
+        out[key.value] = value
+        i += 1
+
+    # TODO: check if this mutability is okay
+    obj = _Py_Object(objkind.DICT, out, false)
+    return Result(obj, None)
 
 def _eval_list(ctx, node):
+    exprlist = node.leaves[0]
+    i = 0
+    out = []
+    while i < len(exprlist.leaves):
+        expr = exprlist.leaves[i]
+        res = _eval_expr(ctx, expr)
+        if res.failed():
+            return res
+        item = res.value
+        out += [item]
+        i += 1
+    obj = _Py_Object(objkind.LIST, out, false)
+    return Result(obj, None)
+
+def _eval_special_call_int(ctx, node):
+    # TODO: implement int()
+    pass
+def _eval_special_call_len(ctx, node):
+    # TODO: implement len()
+    pass
+def _eval_special_map_items(ctx, node):
+    # TODO: implement map.items()
     pass
 
+# SPECIAL_CASES:
+#     map.items()
+#     int(<str>)
+#     len(<list>)
 def _eval_call(ctx, node):
-    pass
+    exprlist = node.leaves[0]
+    callee = node.leaves[1]
 
-def _eval_index(ctx, node):
-    pass
+    if callee.kind == nodekind.TERMINAL and callee.has_lexkind(lexkind.ID):
+        name = callee.value.text
+        if name == "int":
+            return _eval_special_call_int(ctx, node)
+        elif name == "len":
+            return _eval_special_call_len(ctx, node)
+
+    thing = None
+    if callee.kind == nodekind.FIELD_ACCESS:
+        field = callee.leaves[0]
+        operand = callee.leaves[1]
+        res = _eval_expr(ctx, operand)
+        if res.failed():
+            return res
+        obj = res.value
+
+        if obj.is_kind(objkind.DICT):
+            return _eval_special_map_items(ctx, obj, field)
+        else:
+            res = _eval_field_access_obj(ctx, obj, field)
+            if res.failed():
+                return res
+            thing = res.value
+    else:
+        thing = _eval_expr(ctx, callee)
+
+    args = []
+    i = 0
+    while i < len(exprlist.leaves):
+        expr = exprlist.leaves[i]
+
+        res = _eval_expr(ctx, expr)
+        if res.failed():
+            return res
+        args += [res.value]
+        i += 1
+
+    if thing.is_kind(objkind.USER_FUNCTION):
+        err = thing.value.call(ctx, args)
+        obj = ctx.
+        return Result(None, err)
+    elif thing.is_kind(objkind.BUILTIN_FUNC):
+        err = thing.value.call(args)
+        obj = ctx.get_return()
+        return Result(obj, err)
+    elif thing.is_kind(objkind.USER_OBJECT):
+        # TODO: implement call to __init__
+        pass
+    else:
+        err = Error("object is not callable", callee.range.copy())
+        return Result(None, err)
+
+def _eval_field_access_obj(ctx, obj, field):
+    if obj.is_kinds([objkind.STR, objkind.DICT, objkind.NUM,
+                     objkind.LIST, objkind.USER_METHOD, objkind.USER_FUNCTION,
+                     objkind.BUILTIN_FUNC]):
+        err = Error("object has no properties", obj.range.copy())
+        return Result(None, err)
+
+    name = field.value.text
+    if obj.is_kinds([objkind.MODULE]):
+        res = obj.value.get_global(name)
+        if res.failed():
+            res.error.range = field.range.copy()
+            return res
+        return Result(res.value, None)
+    elif obj.is_kind([objkind.USER_OBJECT]):
+        obj = obj.value.get_create_attr(name)
+        return Result(obj, None)
+    else:
+        err = Error("object has invalid type", obj.range.copy())
+        return Result(None, err)
 
 def _eval_field_access(ctx, node):
+    field = node.leaves[0]
+    operand = node.leaves[1]
+    res = _eval_expr(ctx, operand)
+    if res.failed():
+        return res
+    obj = res.value
+
+    return _eval_field_access_obj(ctx, obj, field)
+
+def _eval_index(ctx, node):
+    # TODO: implement indexing
     pass
 
 def _eval_slice(ctx, node):
+    # TODO: implement slicing
     pass
 
 def _eval_expr(ctx, node):
@@ -364,7 +554,7 @@ def _eval_lhs_field_access(ctx, lhs):
     if obj.is_kinds([objkind.STR, objkind.DICT, objkind.NUM,
                      objkind.LIST, objkind.USER_METHOD, objkind.USER_FUNCTION,
                      objkind.BUILTIN_FUNC]):
-        err = Error("object has no methods", obj.range.copy())
+        err = Error("object has no properties", obj.range.copy())
         return Result(None, err)
 
     if obj.is_kinds([objkind.MODULE]):
@@ -416,19 +606,24 @@ def _eval_assign(ctx, node):
     obj.set(exp)
     return Result(None, None)
 
-def _eval_aug_assign(ctx, node):
-    pass
-
-def _eval_while(ctx, node):
-    pass
-
-def _eval_if(ctx, node):
+def _eval_declare_class(ctx, node):
+    # TODO: class declaration
     pass
 
 def _eval_return(ctx, node):
+    # TODO: return statement
     pass
 
-def _eval_declare_class(ctx, node):
+def _eval_aug_assign(ctx, node):
+    # TODO: augmented assign
+    pass
+
+def _eval_while(ctx, node):
+    # TODO: while statement
+    pass
+
+def _eval_if(ctx, node):
+    # TODO: if statement
     pass
 
 def _eval_sttm(ctx, node):
@@ -442,8 +637,6 @@ def _eval_sttm(ctx, node):
         return _eval_def(ctx, node)
     elif node.kind == nodekind.ASSIGN:
         return _eval_assign(ctx, node)
-    elif node.kind == nodekind.MULTI_ASSIGN:
-        return _eval_multi_assign(ctx, node)
     elif node.kind == nodekind.AUGMENTED_ASSIGN:
         return _eval_aug_assign(ctx, node)
     elif node.kind == nodekind.WHILE:
@@ -510,4 +703,3 @@ def evaluate(module_map, entry_name):
     source = module_map[entry_name]
     res = _eval_module(ctx, source)
     return res.error
-
