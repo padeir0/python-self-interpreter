@@ -118,6 +118,14 @@ class _Py_Object:
                 return True
             i += 1
         return False
+    def is_hashable(self):
+        kinds = [
+            objkind.BOOL, objkind.NUM, objkind.STR,
+            objkind.USER_OBJECT, objkind.USER_FUNCTION,
+            objkind.BUILTIN_FUNC, objkind.NONE,
+            objkind.MODULE,
+        ]
+        return self.is_kinds(kinds):
     def set(self, obj):
         self.value = obj.value
 
@@ -130,14 +138,6 @@ class _Scope:
         self.dict = {}
     def add_symbol(self, name, obj):
         self.dict[name] = obj
-    def add_symbols(self, obj_map):
-        kv_pairs = obj_map.items()
-        i = 0
-        while i < len(kv_pairs):
-            key = kv_pair[0]
-            value = kv_pair[1]
-            self.dict[key] = value
-            i += 1
     def set_symbol(self, name, obj):
         if name in self.dict:
             self.dict[name] = obj
@@ -190,9 +190,6 @@ class _Context:
     def add_symbol(self, name, obj):
         self.curr_call_node.curr_scope.add_symbol(name, obj)
 
-    def add_symbols(self, obj_map):
-        self.curr_call_node.curr_scope.add_symbols(obj_map)
-
     def set_symbol(self, name, obj):
         return self.curr_call_node.curr_scope.set_symbol(name, obj):
 
@@ -207,9 +204,148 @@ class _Context:
     def get_return(self):
         return self.curr_call_node.return_obj
 
+def _check_unif_bin(node, left_obj, right_obj):
+    if left_obj.kind != right_obj.kind:
+        return Error("objects have different types", node.range.copy())
+    return None
+
+def _check_unif_bin_types(node, left_obj, right_obj, typelist):
+    if left_obj.kind != right_obj.kind:
+        return Error("objects have different types", node.range.copy())
+    if not left_obj.is_kinds(typelist):
+        msg = "invalid operation on object of type: " + objkind.to_str(left_obj.kind)
+        return Error(msg, node.range.copy())
+    return None
+
+def _eval_arith(left_obj, right_obj, node):
+    err = _check_unif_bin_types(node, left_obj, right_obj, [objkind.NUM])
+    if err != None:
+        return Result(None, err)
+
+    out = None
+    if node.has_lexkind(lexkind.MINUS):
+        out = left_obj.value - right_obj.value
+    elif node.has_lexkind(lexkind.MULT):
+        out = left_obj.value * right_obj.value
+    elif node.has_lexkind(lexkind.DIV):
+        if right_obj.value == 0:
+            err = Error("division by zero", node.range.copy())
+            return Result(None, err)
+        out = left_obj.value / right_obj.value
+    elif node.has_lexkind(lexkind.REM):
+        if right_obj.value == 0:
+            err = Error("division by zero", node.range.copy())
+            return Result(None, err)
+        out = left_obj.value % right_obj.value
+    obj = _Py_Object(objkind.NUM, out, false)
+    return Result(obj, None)
+
+def _eval_identity(left_obj, right_obj, node):
+    err = _check_unif(node, left_obj, right_obj)
+    if err != None:
+        return Result(None, err)
+
+    out = None
+    if node.has_lexkind(lexkind.EQUALS):
+        out = left_obj.value == right_obj.value
+    elif node.has_lexkind(lexkind.DIFF):
+        out = left_obj.value != right_obj.value
+    obj = _Py_Object(objkind.BOOL, out, false)
+    return Result(obj, None)
+
+def _eval_order(left_obj, right_obj, node):
+    err = _check_unif_bin_types(node, left_obj, right_obj, [objkind.NUM])
+    if err != None:
+        return Result(None, err)
+
+    out = None
+    if node.has_lexkind(lexkind.GREATER):
+        out = left_obj.value > right_obj.value
+    elif node.has_lexkind(lexkind.GREATER_OR_EQUALS):
+        out = left_obj.value >= right_obj.value
+    elif node.has_lexkind(lexkind.LESS):
+        out = left_obj.value < right_obj.value
+    elif node.has_lexkind(lexkind.LESS_OR_EQUALS):
+        out = left_obj.value <= right_obj.value
+
+    obj = _Py_Object(objkind.BOOL, out, false)
+    return Result(obj, None)
+
+def _eval_or(left_obj, right_obj, node):
+    err = _check_unif_bin_types(node, left_obj, right_obj, [objkind.BOOL])
+    if err != None:
+        return Result(None, err)
+    out = left_obj.value or right_obj.value
+    obj = _Py_Object(objkind.BOOL, out, false)
+    return Result(obj, None)
+
+def _eval_and(left_obj, right_obj, node):
+    err = _check_unif_bin_types(node, left_obj, right_obj, [objkind.BOOL])
+    if err != None:
+        return Result(None, err)
+    out = left_obj.value and right_obj.value
+    obj = _Py_Object(objkind.BOOL, out, false)
+    return Result(obj, None)
+
+def _eval_plus(left_obj, right_obj, node):
+    kinds = [objkind.NUM, objkind.LIST, objkind.STR]
+    err = _check_unif_bin_types(node, left_obj, right_obj, kinds)
+    if err != None:
+        return Result(None, err)
+
+    out = left_obj.value + right_obj.value
+    obj = _Py_Object(left_obj.kind, out, false)
+    return Result(obj, None)
+
+def _eval_in(left_obj, right_obj, node):
+    if not left_obj.is_hashable():
+        err = Error("object is not hashable", node.left().range.copy())
+        return Result(None, err)
+
+    if not right_obj.is_kind(objkind.DICT):
+        err = Error("object is not a dictionary", node.right().range.copy())
+        return Result(None, err)
+
+    out = left_obj.value in right_obj.value
+    obj = _Py_Object(objkind.BOOL, out, false)
+    return Result(obj, None)
+
+
 def _eval_bin_operator(ctx, node):
-    # TODO: implement binary operators
-    pass
+    left = node.leaves[0]
+    right = node.leaves[1]
+
+    res = _eval_expr(ctx, left)
+    if res.failed():
+        return res
+    left_obj = res.value
+
+    res = _eval_expr(ctx, right)
+    if res.failed():
+        return res
+    right_obj = res.value
+
+    arith = [lexkind.MINUS, lexkind.MULT, lexkind.DIV, lexkind.REM]
+    identity = [lexkind.EQUALS, lexkind.DIFF]
+    order = [lexkind.GREATER, lexkind.GREATER_OR_EQUALS, lexkind.LESS, lexkind.LESS_OR_EQUALS]
+    
+    if node.has_lexkind(lexkind.AND):
+        return _eval_and(left_obj, right_obj, node)
+    elif node.has_lexkind(lexkind.OR):
+        return _eval_or(left_obj, right_obj, node)
+    elif node.has_lexkind(lexkind.IN):
+        return _eval_in(left_obj, right_obj, node)
+    elif node.has_lexkind(lexkind.PLUS):
+        return _eval_plus(left_obj, right_obj, node)
+    elif node.has_lexkinds(arith):
+        return _eval_arith(left_obj, right_obj, node)
+    elif node.has_lexkinds(identity):
+        return _eval_identity(left_obj, right_obj, node)
+    elif node.has_lexkinds(order):
+        return _eval_order(left_obj, right_obj, node)
+    else:
+        err = Error("invalid lexkind for binary operator", node.range.copy())
+        return Result(None, err)
 
 def _eval_una_operator(ctx, node):
     operand = node.leaves[0]
@@ -281,8 +417,11 @@ def _eval_dict(ctx, node):
             return res
         value = res.value
 
-        # TODO: properly check the type of the key
-        out[key.value] = value
+        if not key.is_hashable():
+            err = Error("object is not hashable", key_expr.range.copy())
+            return Result(None, err)
+
+        out[key] = value
         i += 1
 
     # TODO: check if this mutability is okay
@@ -304,18 +443,42 @@ def _eval_list(ctx, node):
     obj = _Py_Object(objkind.LIST, out, false)
     return Result(obj, None)
 
-def _eval_special_call_int(ctx, node):
-    # TODO: implement int()
-    pass
-def _eval_special_call_len(ctx, node):
-    # TODO: implement len()
-    pass
-def _eval_special_map_items(ctx, node):
-    # TODO: implement map.items()
-    pass
+def _eval_special_call_int(ctx, exprlist):
+    if len(exprlist.leaves) != 1:
+        err = Error("invalid number of arguments, expected 1", exprlist.range.copy())
+        return Result(None, err)
+    res = _eval_expr(ctx, exprlist.leaves[0])
+    if res.failed():
+        return res
+    obj = res.value
+
+    if obj.is_kind(objkind.STR):
+        num = int(obj.value)
+        new_obj = _Py_Object(objkind.NUM, num, false)
+        return Result(new_obj, None)
+    else:
+        err = Error("invalid type for int() call", exprlist.range.copy())
+        return Result(None, err)
+
+def _eval_special_call_len(ctx, exprlist):
+    if len(exprlist.leaves) != 1:
+        err = Error("invalid number of arguments, expected 1", exprlist.range.copy())
+        return Result(None, err)
+
+    res = _eval_expr(ctx, exprlist.leaves[0])
+    if res.failed():
+        return res
+    obj = res.value
+
+    if obj.is_kinds([objkind.STR, objkind.LIST]):
+        num = len(obj.value)
+        new_obj = _Py_Object(objkind.NUM, num, false)
+        return Result(new_obj, None)
+    else:
+        err = Error("invalid type for len() call", exprlist.range.copy())
+        return Result(None, err)
 
 # SPECIAL_CASES:
-#     map.items()
 #     int(<str>)
 #     len(<list>)
 def _eval_call(ctx, node):
@@ -325,28 +488,14 @@ def _eval_call(ctx, node):
     if callee.kind == nodekind.TERMINAL and callee.has_lexkind(lexkind.ID):
         name = callee.value.text
         if name == "int":
-            return _eval_special_call_int(ctx, node)
+            return _eval_special_call_int(ctx, exprlist)
         elif name == "len":
-            return _eval_special_call_len(ctx, node)
+            return _eval_special_call_len(ctx, exprlist)
 
-    thing = None
-    if callee.kind == nodekind.FIELD_ACCESS:
-        field = callee.leaves[0]
-        operand = callee.leaves[1]
-        res = _eval_expr(ctx, operand)
-        if res.failed():
-            return res
-        obj = res.value
-
-        if obj.is_kind(objkind.DICT):
-            return _eval_special_map_items(ctx, obj, field)
-        else:
-            res = _eval_field_access_obj(ctx, obj, field)
-            if res.failed():
-                return res
-            thing = res.value
-    else:
-        thing = _eval_expr(ctx, callee)
+    res = _eval_expr(ctx, callee)
+    if res.failed():
+        return res
+    thing = res.value
 
     args = []
     i = 0
