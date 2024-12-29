@@ -99,7 +99,6 @@ class _Module:
             return self.scope.retrieve(name)
         err = Error("name '"+name+"' is not part of module"+self.name, None)
         return Result(None, err)
-        
 
 class _Py_Object:
     def __init__(self, kind, value, mutable):
@@ -126,8 +125,8 @@ class _Py_Object:
             objkind.MODULE,
         ]
         return self.is_kinds(kinds):
-    def set(self, obj):
-        self.value = obj.value
+    def set(self, value):
+        self.value = value
 
 class _Scope:
     def __init__(self, parent, kind):
@@ -203,6 +202,11 @@ class _Context:
 
     def get_return(self):
         return self.curr_call_node.return_obj
+    def set_return(self, obj):
+        if self.curr_call_node.parent == None:
+            return Error("invalid return (outside function?)", None)
+        self.curr_call_node.parent.return_obj = obj
+        return None
 
 def _check_unif_bin(node, left_obj, right_obj):
     if left_obj.kind != right_obj.kind:
@@ -424,7 +428,6 @@ def _eval_dict(ctx, node):
         out[key] = value
         i += 1
 
-    # TODO: check if this mutability is okay
     obj = _Py_Object(objkind.DICT, out, false)
     return Result(obj, None)
 
@@ -555,13 +558,81 @@ def _eval_field_access(ctx, node):
     return _eval_field_access_obj(ctx, obj, field)
 
 def _eval_index(ctx, node):
-    # TODO: implement indexing
-    pass
+    operand = node.leaves[1]
+    expr = node.leaves[0]
+
+    res = _eval_expr(ctx, operand)
+    if res.failed():
+        return res
+    obj = res.value
+
+    res = _eval_expr(ctx, expr)
+    if res.failed():
+        return res
+    index = res.value
+
+    if obj.is_kind(objkind.DICT):
+        if index.is_hashable():
+            if index.value in obj.value:
+                obj = obj.value[index.value]
+                return Result(obj, None)
+            else:
+                err = Error("key not found", expr.range.copy())
+                return Result(None, err)
+        else:
+            err = Error("object not hashable", expr.range.copy())
+            return Result(None, err)
+    elif obj.is_kinds([objkind.LIST, objkind.STR]):
+        if index.is_kind(objkind.NUM):
+            obj = obj.value[index.value]
+            return Result(obj, None)
+        else:
+            err = Error("index is not a number", expr.range.copy())
+    else:
+        err = Error("", operand.range.copy())
+        return Result(None, err)
 
 def _eval_slice(ctx, node):
-    # TODO: implement slicing
-    pass
+    begin_expr = node.leaves[0]
+    end_expr = node.leaves[1]
+    operand_expr = node.leaves[2]
 
+    res = _eval_expr(ctx, operand_expr)
+    if res.failed():
+        return res
+    obj = res.value
+
+    res = _eval_expr(ctx, begin_expr)
+    if res.failed():
+        return res
+    begin = res.value
+
+    res = _eval_expr(ctx, end_expr)
+    if res.failed():
+        return res
+    end = res.value
+
+    if not begin.is_kind(objkind.NUM):
+        err = Error("expected an integer", begin_expr.range.copy())
+        return Result(None, err)
+    if not end.is_kind(objkind.NUM):
+        err = Error("expected an integer", end_expr.range.copy())
+        return Result(None, err)
+    if not obj.is_kinds([objkind.LIST, objkind.STR]):
+        err = Error("expected a list or string", operand_expr.range.copy())
+        return Result(None, err)
+
+    if begin.value < 0 or begin.value > len(obj.value):
+        err = Error("out of bounds", begin_expr.range.copy())
+        return Result(None, err)
+    elif end.value < 0 or end.value > len(obj.value):
+        err = Error("out of bounds", end_expr.range.copy())
+        return Result(None, err)
+
+    out = obj.value[begin.value:end.value]
+    out_obj = _Py_Object(obj.kind, out, false)
+    return Result(out_obj, None)
+    
 def _eval_expr(ctx, node):
     if node.kind == nodekind.BIN_OPERATOR:
         return _eval_bin_operator(ctx, node)
@@ -752,7 +823,7 @@ def _eval_assign(ctx, node):
         return res
     exp = res.value
 
-    obj.set(exp)
+    obj.set(exp.value)
     return Result(None, None)
 
 def _eval_declare_class(ctx, node):
@@ -760,20 +831,99 @@ def _eval_declare_class(ctx, node):
     pass
 
 def _eval_return(ctx, node):
-    # TODO: return statement
-    pass
+    expr = node.leaves[0]
+
+    res = _eval_expr(ctx, expr)
+    if res.failed():
+        return res.error
+    obj = res.value
+
+    err = ctx.set_return(obj)
+    if err != None:
+        err.range = node.range.copy()
+    return err
+
+def _check_unif_aug_ass_types(node, left_obj, right_obj, typelist):
+    if left_obj.kind != right_obj.kind:
+        return Error("objects have different types", node.range.copy())
+    if not left_obj.is_kinds(typelist):
+        msg = "invalid operation on object of type: " + objkind.to_str(left_obj.kind)
+        return Error(msg, node.range.copy())
+    return None
 
 def _eval_aug_assign(ctx, node):
-    # TODO: augmented assign
-    pass
+    lhs_expr = node.leaves[0]
+    rhs_expr = node.leaves[1]
+
+    res = _eval_lhs(ctx, lhs_expr)
+    if res.failed():
+        return res.error
+    lhs_obj = res.value
+
+    res = _eval_expr(ctx, rhs_expr)
+    if res.failed():
+        return res.error
+    rhs_obj = res.value
+
+    if node.has_lexkind(lexkind.ASSIGN_PLUS): # list, num, str
+        kinds = [objkind.LIST, objkind.NUM, objkind.STR]
+        err = _check_unif_aug_ass_types(node, lhs_obj, rhs_obj, kinds)
+        if err != None:
+            return err
+        lhs_obj.set(lhs_obj.value + rhs_obj.value)
+    else:
+        kinds = [objkind.NUM]
+        err = _check_unif_aug_ass_types(node, lhs_obj, rhs_obj, kinds)
+        if err != None:
+            return err
+
+        if node.has_lexkind(lexkind.ASSIGN_MINUS):
+            lhs_obj.set(lhs_obj.value - rhs_obj.value)
+        elif node.has_lexkind(lexkind.ASSIGN_MULT):
+            lhs_obj.set(lhs_obj.value * rhs_obj.value)
+        elif node.has_lexkind(lexkind.ASSIGN_DIV):
+            if rhs_obj.value == 0:
+                return Error("division by zero", rhs_expr.range.copy())
+            lhs_obj.set(lhs_obj.value / rhs_obj.value)
+        elif node.has_lexkind(lexkind.ASSIGN_REM):
+            if rhs_obj.value == 0:
+                return Error("division by zero", rhs_expr.range.copy())
+            lhs_obj.set(lhs_obj.value % rhs_obj.value)
+        else:
+            return Error("invalid lexkind for augmented assign", node.range.copy())
 
 def _eval_while(ctx, node):
-    # TODO: while statement
-    pass
+    expr = node.leaves[0]
+    block = node.leaves[1]
+
+    res = _eval_expr(ctx, expr)
+    if res.failed():
+        return res.error
+    cond = res.value
+
+    if not cond.is_kind(objkind.BOOL):
+        err = Error("expression is not a boolean", expr.range.copy())
+        return err
+
+    while cond.value:
+        res = _eval_block(ctx, block)
+        if res.failed():
+            return res.error
+
+        res = _eval_expr(ctx, expr)
+        if res.failed():
+            return res.error
+        cond = res.value
+
+    return None
 
 def _eval_if(ctx, node):
     # TODO: if statement
-    pass
+    expr = node.leaves[0]
+    block = node.leaves[1]
+    elifs = node.leaves[2]
+    else = node.leaves[3]
+    return Error("unimplemented", node.range.copy())
 
 def _eval_sttm(ctx, node):
     if node.kind == nodekind.EXPR:
