@@ -10,18 +10,18 @@ import scopekind
 # - `print` takes a single argument (no varags) and uses __str__ method if present
 
 class _Builtin_Func:
-    def __init__(self, num_args, function):
+    def __init__(self, num_args, wrapper):
         self.num_args = num_args
-        self.function = function
+        self.wrapper = wrapper
     def call(self, args):
         if len(args) != self.num_args:
             return Error("invalid number of arguments", None)
         if self.num_args == 1:
-            self.function(args[0])
+            self.wrapper(args[0])
         elif self.num_args == 2:
-            self.function(args[0], args[1])
+            self.wrapper(args[0], args[1])
         elif self.num_args == 3:
-            self.function(args[0], args[1], args[2])
+            self.wrapper(args[0], args[1], args[2])
         else:
             return Error("too many arguments", None)
         return None
@@ -29,7 +29,7 @@ class _Builtin_Func:
 # implementamos métodos passando um escopo onde o "self"
 # é uma variável respresentando a instancia do objeto
 class _User_Function:
-    def __init__(self, name, block, formal_args, parent_scope):
+    def __init__(self, name, formal_args, block, parent_scope):
         self.name = name
         self.block = block
         # lista dos nomes dos argumentos
@@ -60,7 +60,8 @@ class _User_Function:
         return None
     
 class _User_Object_Template:
-    def __init__(self, node, methods):
+    def __init__(self, name, node, methods):
+        self.name = name
         self.node = node
         self.methods = methods
     # preenche self.value usando a logica do __init__ criado pelo usuario
@@ -86,6 +87,7 @@ class _User_Object_Instance:
         # dicionario de tipo str->_User_Function que contém os métodos
         # do objeto
         self.methods = template.methods
+        self.class_name = template.name
 
     def get_method(self, name):
         if name in self.methods:
@@ -101,7 +103,7 @@ class _User_Object_Instance:
             return Result(None, True)
 
     def create_attr(self, attr_name):
-        self.properties[attr_name] = _Py_Object(objkind.NONE, None, false)
+        self.properties[attr_name] = _Py_Object(objkind.NONE, None, False)
         return self.properties[attr_name]
 
 class _Module:
@@ -140,7 +142,8 @@ class _Py_Object:
             objkind.MODULE,
         ]
         return self.is_kinds(kinds)
-    def set(self, value):
+    def set(self, kind, value):
+        self.kind = kind
         self.value = value
 
 class _Scope:
@@ -198,6 +201,9 @@ class _Context:
     def curr_scope(self):
         return self.curr_call_node.curr_scope
 
+    def contains_symbol(self, name):
+        return self.curr_call_node.curr_scope.contains(name)
+
     def retrieve(self, name):
         return self.curr_call_node.curr_scope.retrieve(name)
 
@@ -205,7 +211,7 @@ class _Context:
         self.curr_call_node.curr_scope.add_symbol(name, obj)
 
     def set_symbol(self, name, obj):
-        return self.curr_call_node.curr_scope.set_symbol(name, obj):
+        return self.curr_call_node.curr_scope.set_symbol(name, obj)
 
     def set_mod(self, mod_name, mod):
         self.evaluated_mods[mod_name] = mod
@@ -257,7 +263,7 @@ def _eval_arith(left_obj, right_obj, node):
             err = Error("division by zero", node.range.copy())
             return Result(None, err)
         out = left_obj.value % right_obj.value
-    obj = _Py_Object(objkind.NUM, out, false)
+    obj = _Py_Object(objkind.NUM, out, False)
     return Result(obj, None)
 
 def _eval_identity(left_obj, right_obj, node):
@@ -270,7 +276,7 @@ def _eval_identity(left_obj, right_obj, node):
         out = left_obj.value == right_obj.value
     elif node.has_lexkind(lexkind.DIFF):
         out = left_obj.value != right_obj.value
-    obj = _Py_Object(objkind.BOOL, out, false)
+    obj = _Py_Object(objkind.BOOL, out, False)
     return Result(obj, None)
 
 def _eval_order(left_obj, right_obj, node):
@@ -288,7 +294,7 @@ def _eval_order(left_obj, right_obj, node):
     elif node.has_lexkind(lexkind.LESS_OR_EQUALS):
         out = left_obj.value <= right_obj.value
 
-    obj = _Py_Object(objkind.BOOL, out, false)
+    obj = _Py_Object(objkind.BOOL, out, False)
     return Result(obj, None)
 
 def _eval_or(left_obj, right_obj, node):
@@ -296,7 +302,7 @@ def _eval_or(left_obj, right_obj, node):
     if err != None:
         return Result(None, err)
     out = left_obj.value or right_obj.value
-    obj = _Py_Object(objkind.BOOL, out, false)
+    obj = _Py_Object(objkind.BOOL, out, False)
     return Result(obj, None)
 
 def _eval_and(left_obj, right_obj, node):
@@ -304,7 +310,7 @@ def _eval_and(left_obj, right_obj, node):
     if err != None:
         return Result(None, err)
     out = left_obj.value and right_obj.value
-    obj = _Py_Object(objkind.BOOL, out, false)
+    obj = _Py_Object(objkind.BOOL, out, False)
     return Result(obj, None)
 
 def _eval_plus(left_obj, right_obj, node):
@@ -314,7 +320,7 @@ def _eval_plus(left_obj, right_obj, node):
         return Result(None, err)
 
     out = left_obj.value + right_obj.value
-    obj = _Py_Object(left_obj.kind, out, false)
+    obj = _Py_Object(left_obj.kind, out, False)
     return Result(obj, None)
 
 def _eval_in(left_obj, right_obj, node):
@@ -327,7 +333,7 @@ def _eval_in(left_obj, right_obj, node):
         return Result(None, err)
 
     out = left_obj.value in right_obj.value
-    obj = _Py_Object(objkind.BOOL, out, false)
+    obj = _Py_Object(objkind.BOOL, out, False)
     return Result(obj, None)
 
 def _eval_bin_operator(ctx, node):
@@ -375,7 +381,7 @@ def _eval_una_operator(ctx, node):
     if node.has_lexkind(lexkind.NOT):
         if obj.is_kind(objkind.BOOL):
             new_value = not obj.value
-            obj = _Py_Object(objkind.BOOL, new_value, false)
+            obj = _Py_Object(objkind.BOOL, new_value, False)
             return Result(obj, None)
         else:
             err = Error("object is not a boolean", operand.range.copy())
@@ -383,7 +389,7 @@ def _eval_una_operator(ctx, node):
     elif node.has_lexkind(lexkind.MINUS):
         if obj.is_kind(objkind.NUM):
             new_value = -obj.value
-            obj = _Py_Object(objkind.NUM, new_value, false)
+            obj = _Py_Object(objkind.NUM, new_value, False)
             return Result(obj, None)
         else:
             err = Error("object is not a number", operand.range.copy())
@@ -395,11 +401,11 @@ def _eval_una_operator(ctx, node):
 def _eval_terminal(ctx, node):
     obj = None
     if node.has_lexkind(lexkind.TRUE):
-        obj = _Py_Object(objkind.BOOL, True, false)
+        obj = _Py_Object(objkind.BOOL, True, False)
     elif node.has_lexkind(lexkind.FALSE):
-        obj = _Py_Object(objkind.BOOL, False, false)
+        obj = _Py_Object(objkind.BOOL, False, False)
     elif node.has_lexkind(lexkind.NONE):
-        obj = _Py_Object(objkind.NONE, None, false)
+        obj = _Py_Object(objkind.NONE, None, False)
     elif node.has_lexkind(lexkind.ID) or node.has_lexkind(lexkind.SELF):
         name = node.value.text
         res = ctx.retrieve(name)
@@ -409,9 +415,9 @@ def _eval_terminal(ctx, node):
             return Result(None, err)
         obj = res.value
     elif node.has_lexkind(lexkind.STR):
-        obj = _Py_Object(objkind.STR, node.value.text, false)
+        obj = _Py_Object(objkind.STR, node.value.text, False)
     elif node.has_lexkind(lexkind.NUM):
-        obj = _Py_Object(objkind.NUM, int(node.value.text), false)
+        obj = _Py_Object(objkind.NUM, int(node.value.text), False)
     else:
         err = Error("invalid lexkind for terminal", node.range.copy())
         return Result(None, err)
@@ -443,7 +449,7 @@ def _eval_dict(ctx, node):
         out[key] = value
         i += 1
 
-    obj = _Py_Object(objkind.DICT, out, false)
+    obj = _Py_Object(objkind.DICT, out, False)
     return Result(obj, None)
 
 def _eval_list(ctx, node):
@@ -458,7 +464,7 @@ def _eval_list(ctx, node):
         item = res.value
         out += [item]
         i += 1
-    obj = _Py_Object(objkind.LIST, out, false)
+    obj = _Py_Object(objkind.LIST, out, False)
     return Result(obj, None)
 
 def _eval_special_call_int(ctx, exprlist):
@@ -472,7 +478,7 @@ def _eval_special_call_int(ctx, exprlist):
 
     if obj.is_kind(objkind.STR):
         num = int(obj.value)
-        new_obj = _Py_Object(objkind.NUM, num, false)
+        new_obj = _Py_Object(objkind.NUM, num, False)
         return Result(new_obj, None)
     else:
         err = Error("invalid type for int() call", exprlist.range.copy())
@@ -490,7 +496,7 @@ def _eval_special_call_len(ctx, exprlist):
 
     if obj.is_kinds([objkind.STR, objkind.LIST]):
         num = len(obj.value)
-        new_obj = _Py_Object(objkind.NUM, num, false)
+        new_obj = _Py_Object(objkind.NUM, num, False)
         return Result(new_obj, None)
     else:
         err = Error("invalid type for len() call", exprlist.range.copy())
@@ -558,7 +564,7 @@ def _eval_field_access(ctx, node):
     if obj.is_kinds([objkind.STR, objkind.DICT, objkind.NUM,
                      objkind.LIST, objkind.USER_FUNCTION,
                      objkind.BUILTIN_FUNC]):
-        err = Error("object has no properties", obj.range.copy())
+        err = Error("object has no properties", operand.range.copy())
         return Result(None, err)
 
     name = field.value.text
@@ -574,7 +580,7 @@ def _eval_field_access(ctx, node):
             news = _Scope(func.parent, scopekind.FUNC)
             news.add_symbol("self", obj)
             func.parent = news
-            obj = _Py_Object(objkind.FUNC, func, false)
+            obj = _Py_Object(objkind.FUNC, func, False)
         elif name in obj.value.properties:
             obj = obj.value.get_attr(name)
         else:
@@ -617,7 +623,8 @@ def _eval_index(ctx, node):
         else:
             err = Error("index is not a number", expr.range.copy())
     else:
-        err = Error("", operand.range.copy())
+        msg = "unexpected type for indexing: " + objkind.to_str(obj.kind)
+        err = Error(msg, operand.range.copy())
         return Result(None, err)
 
 def _eval_slice(ctx, node):
@@ -658,7 +665,7 @@ def _eval_slice(ctx, node):
         return Result(None, err)
 
     out = obj.value[begin.value:end.value]
-    out_obj = _Py_Object(obj.kind, out, false)
+    out_obj = _Py_Object(obj.kind, out, False)
     return Result(out_obj, None)
     
 def _eval_expr(ctx, node):
@@ -692,8 +699,10 @@ def _eval_import(ctx, node):
 
         mod = ctx.get_mod()
         if mod == None:
-            res = eval_module(ctx, name)
+            res = _eval_module(ctx, name)
             if res.failed():
+                if res.error.range == None:
+                    res.error.range = node.range.copy()
                 return res.error()
             mod = res.value
             obj = _Py_Object(mod, objkind.MODULE, False)
@@ -714,6 +723,8 @@ def _eval_from(ctx, node):
     if mod == None:
         res = _eval_module(ctx, name)
         if res.failed():
+            if res.error.range == None:
+                res.error.range = node.range.copy()
             return res.error
         mod = res.value
 
@@ -750,7 +761,8 @@ def _eval_func(ctx, node):
     arg_names = _extract_names(args.leaves)
 
     func = _User_Function(name, arg_names, block, ctx.curr_scope())
-    ctx.add_symbol(name, func)
+    obj = _Py_Object(objkind.USER_FUNCTION, func, False)
+    ctx.add_symbol(name, obj)
     return None
 
 def _eval_lhs_index(ctx, lhs):
@@ -828,8 +840,11 @@ def _eval_lhs_field_access(ctx, lhs):
 # A função eval_lhs retorna um _Py_Object, esse, por ser passado por
 # referência, pode ser atribuido futuramente.
 def _eval_lhs(ctx, lhs):
-    if lhs.kind == nodekind.TERMINAL and lhs.value.kind == nodekind.ID:
+    if lhs.kind == nodekind.TERMINAL and lhs.value.kind == lexkind.ID:
         name = lhs.value.text
+        if not ctx.contains_symbol(name):
+            newnone = _Py_Object(objkind.NONE, None, False)
+            ctx.add_symbol(name, newnone)
         res = ctx.retrieve(name)
         if res.failed():
             return res
@@ -849,16 +864,16 @@ def _eval_assign(ctx, node):
 
     res = _eval_lhs(ctx, lhs)
     if res.failed():
-        return res
+        return res.error
     obj = res.value
 
     res = _eval_expr(ctx, rhs)
     if res.failed():
-        return res
+        return res.error
     exp = res.value
 
-    obj.set(exp.value)
-    return Result(None, None)
+    obj.set(exp.kind, exp.value)
+    return None
 
 def _extract_method_args(arg_list):
     i = 0
@@ -893,7 +908,7 @@ def _eval_declare_class(ctx, node):
         i += 1
 
     name = id.value.text
-    value = _User_Object_Template(name, methods)
+    value = _User_Object_Template(name, node, methods)
     obj = _Py_Object(objkind.USER_CLASS, value, False)
 
     ctx.add_symbol(name, obj)
@@ -939,7 +954,7 @@ def _eval_aug_assign(ctx, node):
         err = _check_unif_aug_ass_types(node, lhs_obj, rhs_obj, kinds)
         if err != None:
             return err
-        lhs_obj.set(lhs_obj.value + rhs_obj.value)
+        lhs_obj.set(lhs_obj.kind, lhs_obj.value + rhs_obj.value)
     else:
         kinds = [objkind.NUM]
         err = _check_unif_aug_ass_types(node, lhs_obj, rhs_obj, kinds)
@@ -947,17 +962,17 @@ def _eval_aug_assign(ctx, node):
             return err
 
         if node.has_lexkind(lexkind.ASSIGN_MINUS):
-            lhs_obj.set(lhs_obj.value - rhs_obj.value)
+            lhs_obj.set(lhs_obj.kind, lhs_obj.value - rhs_obj.value)
         elif node.has_lexkind(lexkind.ASSIGN_MULT):
-            lhs_obj.set(lhs_obj.value * rhs_obj.value)
+            lhs_obj.set(lhs_obj.kind, lhs_obj.value * rhs_obj.value)
         elif node.has_lexkind(lexkind.ASSIGN_DIV):
             if rhs_obj.value == 0:
                 return Error("division by zero", rhs_expr.range.copy())
-            lhs_obj.set(lhs_obj.value / rhs_obj.value)
+            lhs_obj.set(lhs_obj.kind, lhs_obj.value / rhs_obj.value)
         elif node.has_lexkind(lexkind.ASSIGN_REM):
             if rhs_obj.value == 0:
                 return Error("division by zero", rhs_expr.range.copy())
-            lhs_obj.set(lhs_obj.value % rhs_obj.value)
+            lhs_obj.set(lhs_obj.kind, lhs_obj.value % rhs_obj.value)
         else:
             return Error("invalid lexkind for augmented assign", node.range.copy())
 
@@ -1028,11 +1043,9 @@ def _eval_if(ctx, node):
     return None
 
 def _eval_sttm(ctx, node):
-    if node.kind == nodekind.EXPR:
-        return _eval_expr_sttm(ctx, node)
-    elif node.kind == nodekind.IMPORT:
+    if node.kind == nodekind.IMPORT:
         return _eval_import(ctx, node)
-    elif node.kind == nodekind.FROM:
+    elif node.kind == nodekind.FROM_IMPORT:
         return _eval_from(ctx, node)
     elif node.kind == nodekind.FUNC:
         return _eval_func(ctx, node)
@@ -1051,7 +1064,8 @@ def _eval_sttm(ctx, node):
     elif node.kind == nodekind.PASS:
         return None
     else:
-        return Error("invalid statement", node.range.copy())
+        res = _eval_expr(ctx, node)
+        return res.error
 
 def _eval_block(ctx, node):
     i = 0
@@ -1065,7 +1079,7 @@ def _eval_block(ctx, node):
 
 def _eval_module(ctx, name):
     if not name in ctx.source_map:
-        err = Error("module '"+name+"' not found", leaf.range.copy())
+        err = Error("module '"+name+"' not found", None)
         return Result(None, err)
     source = ctx.source_map[name]
 
@@ -1076,6 +1090,7 @@ def _eval_module(ctx, name):
     if n.kind != nodekind.BLOCK:
         err = Error("expected root node to be a _block", None)
         return Result(None, err)
+    n.compute_range()
 
     s = _Scope(ctx.builtin_scope, scopekind.MODULE)
     ctx.push_env(s)
@@ -1088,9 +1103,65 @@ def _eval_module(ctx, name):
     ctx.pop_env()
     return Result(module, None)
 
+# TODO: figure out how to self-interpret this function without making a mess
+def _str_dict(dict):
+    keys = list(dict.value.keys())
+    out = "{"
+    i = 0
+    while i < len(keys):
+        key = keys[i]
+        value = dict.value[key]
+        out += str(key) + ":" + _str_obj(value)
+        if i + 1 < len(keys):
+            out += ", "
+        i += 1
+
+def _str_list(list):
+    i = 0
+    out = "["
+    while i < len(list.value):
+        obj = list.value[i]
+        out += _str_obj(obj)
+        if i + 1 < len(list.value):
+            out += ", "
+        i += 1
+    out += "]"
+    return out
+
+def _str_obj(obj):
+    if obj.is_kind(objkind.LIST):
+        return _str_list(obj)
+    elif obj.is_kind(objkind.STR):
+        return "\"" + obj.value + "\""
+    elif obj.is_kind(objkind.BOOL):
+        if obj.value:
+            return "True"
+        else:
+            return "False"
+    elif obj.is_kind(objkind.NUM):
+        return str(obj.value)
+    elif obj.is_kind(objkind.DICT):
+        return _str_dict(obj)
+    elif obj.is_kind(objkind.MODULE):
+        return "module<" + obj.value.name + ">"
+    elif obj.is_kind(objkind.USER_OBJECT):
+        return "object<" + obj.value.class_name + ">"
+    elif obj.is_kind(objkind.USER_FUNCTION):
+        return "function<" + obj.value.name + ">"
+    elif obj.is_kind(objkind.NONE):
+        return "None"
+    elif obj.is_kind(objkind.USER_CLASS):
+        return "class<" + obj.value.name + ">"
+    else:
+        return "<unknown>"
+
+def _print_wrapper(arg):
+    print(_str_obj(arg))
+
 def _create_builtin_scope():
     s = _Scope(None, scopekind.BUILTIN)
-    p = _Builtin_Func(1, print)
+    func = _Builtin_Func(1, _print_wrapper)
+    p = _Py_Object(objkind.BUILTIN_FUNC, func, False)
     s.add_symbol("print", p)
     return s
 
@@ -1101,6 +1172,5 @@ def evaluate(module_map, entry_name):
     s = _create_builtin_scope()
     node = _Call_Node(None, s)
     ctx = _Context(module_map, node, s)
-    source = module_map[entry_name]
-    res = _eval_module(ctx, source)
+    res = _eval_module(ctx, entry_name)
     return res.error

@@ -27,6 +27,7 @@ KEY_VALUE_PAIR = 27 # [key, value]
 ELIF_LIST = 28      # [elif1, elif2, ...]
 UNA_OPERATOR = 29   # [operand]
 RETURN = 30         # [expr]
+PASS = 31
 
 def to_str(kind):
     if kind == INVALID: 

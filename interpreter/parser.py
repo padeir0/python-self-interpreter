@@ -544,7 +544,12 @@ def _methods(parser):
 def _pass(parser):
     parser.track("_pass")
     if parser.word_is(lexkind.PASS):
-        return parser.consume()
+        res = parser.consume()
+        if res.failed():
+            return res
+        node = res.value
+        node.kind = nodekind.PASS
+        return Result(node, None)
     return Result(None, None)
 
 # Func = 'def' id Arguments ':' NL >Block.

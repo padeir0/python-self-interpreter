@@ -1,5 +1,6 @@
 #!/bin/python
 from parser import parse
+from evaluator import evaluate
 import os
 import sys
 
@@ -38,19 +39,6 @@ def extract_offense(range, program):
 
     return offense
 
-def do_the_thing(dict, modname):
-    input = dict[modname]
-    res = parse(input, False)
-    if res.failed():
-        e = res.error.copy()
-        e.correct_editor_view() 
-        print(e)
-        print("\t" + extract_offense(res.error.range, input))
-    else:
-        res.value.compute_range()
-        print("")
-        print(res.value)
-
 def get_python_files(directory_path):
     files_contents = {}
     
@@ -87,7 +75,14 @@ def run_single_file(file_path):
     modname = os.path.basename(file_path)
     modname = modname[:len(modname)-3] # remove ".py"
     files = get_python_files(root)
-    do_the_thing(files, modname)
+    err = evaluate(files, modname)
+    if err != None:
+        e = err.copy()
+        e.correct_editor_view() 
+        print(e)
+        code = files[modname]
+        if err.range != None:
+            print("\t" + extract_offense(err.range, code))
 
 def test_whole_dir(folder_path):
     files = get_python_files(folder_path)
