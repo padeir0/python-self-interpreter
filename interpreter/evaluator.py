@@ -40,7 +40,7 @@ class _User_Function:
 
     def call(self, ctx, args):
         if len(args) != len(self.formal_args):
-            return Error("invalid number of arguments")
+            return Error("invalid number of arguments", None)
 
         s = _Scope(self.parent_scope, scopekind.FUNCTION)
         ctx.push_env(s)
@@ -52,7 +52,7 @@ class _User_Function:
             s.add_symbol(name, obj)
             i += 1
 
-        err = eval_block(ctx, self.block)
+        err = _eval_block(ctx, self.block)
         if err != None:
             return err
 
@@ -60,34 +60,49 @@ class _User_Function:
         return None
     
 class _User_Object_Template:
-    def __init__(self, node, scope):
+    def __init__(self, node, methods):
         self.node = node
-        self.scope = scope
+        self.methods = methods
+    # preenche self.value usando a logica do __init__ criado pelo usuario
+    # emite um erro se não existir __init__
+    def eval_init(self, ctx, args):
+        instance = _User_Object_Instance(self)
+        if "__init__" in obj.methods:
+            func = instance.get_method("__init__")
+            news = _Scope(func.parent, scopekind.FUNC)
+            news.add_symbol("self", instance)
+            func.parent = news
+            func.call(ctx, args)
+            return Result(instance, None)
+        else:
+            err = Error("object has no __init__ procedure", None)
+            return Result(None, err)
 
 class _User_Object_Instance:
     def __init__(self, template):
-        self.template = template
         # dicionario de tipo str->_Py_Object que contém as propriedades
         # do objeto
-        self.value = None
+        self.properties = None
+        # dicionario de tipo str->_User_Function que contém os métodos
+        # do objeto
+        self.methods = template.methods
 
-    # preenche self.value usando a logica do __init__ criado pelo usuario
-    # emitir um erro se não existir __init__
-    def eval_init(self, args):
-        # TODO: implement evaling __init__
-        pass
-
+    def get_method(self, name):
+        if name in self.methods:
+            return Result(self.methods[name], None)
+        else:
+            return Result(None, True)
+    
     # retorna um atributo do objeto
     def get_attr(self, attr_name):
-        if attr_name in self.value:
-            return Result(self.value[attr_name], None)
+        if attr_name in self.properties:
+            return Result(self.properties[attr_name], None)
         else:
             return Result(None, True)
 
-    def get_create_attr(self, attr_name):
-        if not attr_name in self.value:
-            self.value[attr_name] = _Py_Object(objkind.NONE, None, false)
-        return self.value[attr_name]
+    def create_attr(self, attr_name):
+        self.properties[attr_name] = _Py_Object(objkind.NONE, None, false)
+        return self.properties[attr_name]
 
 class _Module:
     def __init__(self, name, mod_scope):
@@ -124,7 +139,7 @@ class _Py_Object:
             objkind.BUILTIN_FUNC, objkind.NONE,
             objkind.MODULE,
         ]
-        return self.is_kinds(kinds):
+        return self.is_kinds(kinds)
     def set(self, value):
         self.value = value
 
@@ -202,6 +217,7 @@ class _Context:
 
     def get_return(self):
         return self.curr_call_node.return_obj
+
     def set_return(self, obj):
         if self.curr_call_node.parent == None:
             return Error("invalid return (outside function?)", None)
@@ -314,7 +330,6 @@ def _eval_in(left_obj, right_obj, node):
     obj = _Py_Object(objkind.BOOL, out, false)
     return Result(obj, None)
 
-
 def _eval_bin_operator(ctx, node):
     left = node.leaves[0]
     right = node.leaves[1]
@@ -385,7 +400,7 @@ def _eval_terminal(ctx, node):
         obj = _Py_Object(objkind.BOOL, False, false)
     elif node.has_lexkind(lexkind.NONE):
         obj = _Py_Object(objkind.NONE, None, false)
-    elif node.has_lexkind(lexkind.ID):
+    elif node.has_lexkind(lexkind.ID) or node.has_lexkind(lexkind.SELF):
         name = node.value.text
         res = ctx.retrieve(name)
         if res.failed():
@@ -513,22 +528,35 @@ def _eval_call(ctx, node):
 
     if thing.is_kind(objkind.USER_FUNCTION):
         err = thing.value.call(ctx, args)
-        obj = ctx.
-        return Result(None, err)
+        if err != None:
+            err.range = exprlist.range.copy()
+            return Result(None, err)
+        obj = ctx.get_return()
+        return Result(obj, None)
     elif thing.is_kind(objkind.BUILTIN_FUNC):
         err = thing.value.call(args)
         obj = ctx.get_return()
         return Result(obj, err)
-    elif thing.is_kind(objkind.USER_OBJECT):
-        # TODO: implement call to __init__
-        pass
+    elif thing.is_kind(objkind.USER_CLASS):
+        res = thing.value.eval_init(args)
+        if res.failed():
+            res.error.range = callee.range.copy()
+        obj = res.value
+        return Result(obj, err)
     else:
         err = Error("object is not callable", callee.range.copy())
         return Result(None, err)
 
-def _eval_field_access_obj(ctx, obj, field):
+def _eval_field_access(ctx, node):
+    field = node.leaves[0]
+    operand = node.leaves[1]
+    res = _eval_expr(ctx, operand)
+    if res.failed():
+        return res
+    obj = res.value
+
     if obj.is_kinds([objkind.STR, objkind.DICT, objkind.NUM,
-                     objkind.LIST, objkind.USER_METHOD, objkind.USER_FUNCTION,
+                     objkind.LIST, objkind.USER_FUNCTION,
                      objkind.BUILTIN_FUNC]):
         err = Error("object has no properties", obj.range.copy())
         return Result(None, err)
@@ -541,21 +569,21 @@ def _eval_field_access_obj(ctx, obj, field):
             return res
         return Result(res.value, None)
     elif obj.is_kind([objkind.USER_OBJECT]):
-        obj = obj.value.get_create_attr(name)
+        if name in obj.value.methods:
+            func = obj.value.get_method(name)
+            news = _Scope(func.parent, scopekind.FUNC)
+            news.add_symbol("self", obj)
+            func.parent = news
+            obj = _Py_Object(objkind.FUNC, func, false)
+        elif name in obj.value.properties:
+            obj = obj.value.get_attr(name)
+        else:
+            err = Error("property not found", field.range.copy())
+            return Result(err, None)
         return Result(obj, None)
     else:
         err = Error("object has invalid type", obj.range.copy())
         return Result(None, err)
-
-def _eval_field_access(ctx, node):
-    field = node.leaves[0]
-    operand = node.leaves[1]
-    res = _eval_expr(ctx, operand)
-    if res.failed():
-        return res
-    obj = res.value
-
-    return _eval_field_access_obj(ctx, obj, field)
 
 def _eval_index(ctx, node):
     operand = node.leaves[1]
@@ -713,7 +741,7 @@ def _extract_names(arg_list):
 
     return out
 
-def _def(ctx, node):
+def _eval_func(ctx, node):
     id = node.leaves[0]
     args = node.leaves[1]
     block = node.leaves[2]
@@ -772,7 +800,7 @@ def _eval_lhs_field_access(ctx, lhs):
     obj = res.value
 
     if obj.is_kinds([objkind.STR, objkind.DICT, objkind.NUM,
-                     objkind.LIST, objkind.USER_METHOD, objkind.USER_FUNCTION,
+                     objkind.LIST, objkind.USER_FUNCTION,
                      objkind.BUILTIN_FUNC]):
         err = Error("object has no properties", obj.range.copy())
         return Result(None, err)
@@ -783,7 +811,13 @@ def _eval_lhs_field_access(ctx, lhs):
 
     if obj.is_kind([objkind.USER_OBJECT]):
         name = field.value.text
-        obj = obj.value.get_create_attr(name)
+        if name in obj.value.methods:
+            err = Error("methods are not mutable", field.range.copy())
+            return Result(None, err)
+        elif name in obj.value.properties:
+            obj = obj.value.get_attr(name)
+        else:
+            obj = obj.value.create_attr(name)
         return Result(obj, None)
     else:
         err = Error("object has invalid type", obj.range.copy())
@@ -826,9 +860,44 @@ def _eval_assign(ctx, node):
     obj.set(exp.value)
     return Result(None, None)
 
+def _extract_method_args(arg_list):
+    i = 0
+    out = []
+    while i < len(arg_list):
+        arg = arg_list[i]
+        if not arg.has_lexkind(lexkind.SELF):
+            out += [arg.value.text]
+        i += 1
+
+    return out
+
+def _eval_method(ctx, node):
+    id = node.leaves[0]
+    args = node.leaves[1]
+    block = node.leaves[2]
+
+    name = id.value.text
+    arg_names = _extract_method_args(args.leaves)
+
+    return _User_Function(name, arg_names, block, ctx.curr_scope())
+
 def _eval_declare_class(ctx, node):
-    # TODO: class declaration
-    pass
+    id = node.leaves[0]
+    met_node = node.leaves[1]
+
+    methods = {}
+    i = 0
+    while i < len(met_node.leaves):
+        method = _eval_method(ctx, met_node.leaves[i])
+        methods[method.name] = method
+        i += 1
+
+    name = id.value.text
+    value = _User_Object_Template(name, methods)
+    obj = _Py_Object(objkind.USER_CLASS, value, False)
+
+    ctx.add_symbol(name, obj)
+    return None
 
 def _eval_return(ctx, node):
     expr = node.leaves[0]
@@ -918,12 +987,45 @@ def _eval_while(ctx, node):
     return None
 
 def _eval_if(ctx, node):
-    # TODO: if statement
-    expr = node.leaves[0]
+    cond = node.leaves[0]
     block = node.leaves[1]
     elifs = node.leaves[2]
-    else = node.leaves[3]
-    return Error("unimplemented", node.range.copy())
+    _else = node.leaves[3]
+
+    res = _eval_expr(ctx, cond)
+    if res.failed():
+        return res.error
+    obj = res.value
+
+    if not obj.is_kind(objkind.BOOL):
+        return Error("condition expected to be boolean", expr.range.copy())
+
+    if obj.value:
+        return _eval_block(ctx, block)
+
+    if elifs != None:
+        i = 0
+        while i < len(elifs):
+            _elif = elifs.leaves[i]
+            cond = _elif.leaves[0]
+            block = _elif.leaves[1]
+
+            res = _eval_expr(ctx, cond)
+            if res.failed():
+                return res.error
+            obj = res.value
+
+            if not obj.is_kind(objkind.BOOL):
+                return Error("condition expected to be boolean", expr.range.copy())
+
+            if obj.value:
+                return _eval_block(ctx, block)
+            i += 1
+
+    if _else != None:
+        return _eval_block(ctx, _else.leaves[0])
+    
+    return None
 
 def _eval_sttm(ctx, node):
     if node.kind == nodekind.EXPR:
@@ -932,8 +1034,8 @@ def _eval_sttm(ctx, node):
         return _eval_import(ctx, node)
     elif node.kind == nodekind.FROM:
         return _eval_from(ctx, node)
-    elif node.kind == nodekind.DEF:
-        return _eval_def(ctx, node)
+    elif node.kind == nodekind.FUNC:
+        return _eval_func(ctx, node)
     elif node.kind == nodekind.ASSIGN:
         return _eval_assign(ctx, node)
     elif node.kind == nodekind.AUGMENTED_ASSIGN:
@@ -985,13 +1087,13 @@ def _eval_module(ctx, name):
 
     ctx.pop_env()
     return Result(module, None)
-    
+
 def _create_builtin_scope():
     s = _Scope(None, scopekind.BUILTIN)
     p = _Builtin_Func(1, print)
     s.add_symbol("print", p)
     return s
-    
+
 def evaluate(module_map, entry_name):
     if not entry_name in module_map:
         return Error("entry module not in module map", None)

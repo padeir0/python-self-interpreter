@@ -9,3 +9,4 @@ MODULE        = 7
 BUILTIN_FUNC  = 8
 NONE          = 9
 BOOL          = 10
+USER_CLASS    = 11
