@@ -112,6 +112,15 @@ class Node:
     def has_lexkind(self, kind):
         return self.value.kind == kind
 
+    def has_lexkinds(self, kinds):
+        i = 0
+        while i < len(kinds):
+            kind = kinds[i]
+            if self.value.kind == kind:
+                return True
+            i += 1
+        return False
+
     def compute_range(self):
         if self.kind == nodekind.TERMINAL:
             self.range = self.value.range.copy()

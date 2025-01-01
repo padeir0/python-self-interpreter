@@ -1,6 +1,7 @@
 #!/bin/python
 from parser import parse
 from evaluator import evaluate
+from _builtins import create_builtin_scope
 import os
 import sys
 
@@ -75,18 +76,30 @@ def run_single_file(file_path):
     modname = os.path.basename(file_path)
     modname = modname[:len(modname)-3] # remove ".py"
     files = get_python_files(root)
-    err = evaluate(files, modname)
+    builtins = create_builtin_scope()
+    err = evaluate(builtins, files, modname)
     if err != None:
         e = err.copy()
         e.correct_editor_view() 
         print(e)
         code = files[modname]
         if err.range != None:
-            print("\t" + extract_offense(err.range, code))
+            print(extract_offense(err.range, code))
+
+def get_python_file_names(directory_path):
+    file_names = []
+    
+    for root, _, files in os.walk(directory_path):
+        for file in files:
+            if file.endswith(".py"):
+                file_path = os.path.join(root, file)
+                file_names += [file_path]
+    return file_names
 
 def test_whole_dir(folder_path):
-    files = get_python_files(folder_path)
-    print(files)
+    files = get_python_file_names(folder_path)
+    for file in files:
+        run_single_file(file)
     
 if __name__ == "__main__":
     if len(sys.argv) == 2:

@@ -113,8 +113,8 @@ Quando escrevemos:
 Block: { =Statement NL }.
 ```
 
-Queremos dizer que o nivel de indentação de cada `Statement`
-precisa ser necessáriamente igual da produção `Block`.
+Queremos dizer que o nível de indentação de cada `Statement`
+precisa ser necessariamente igual da produção `Block`.
 A indentação de `Block` é definida pelo primeiro `Statement` do bloco,
 que consome o primeiro token.
 
