@@ -5,10 +5,6 @@ class A:
         self.prop *= 2
 
 def test():
-    # for some reason, after evaluating __init__
-    # the interpreter does not return to the current
-    # call node, and keeps the environment created inside __init__
-    # TODO: fix this bug
     myA = A(1)
     if myA.prop != 1:
         return False

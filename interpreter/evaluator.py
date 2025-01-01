@@ -70,16 +70,18 @@ class _User_Object_Template:
     # emite um erro se não existir __init__
     def eval_init(self, ctx, args):
         instance = _User_Object_Instance(self)
+        obj = _Py_Object(objkind.USER_OBJECT, instance, True)
         if "__init__" in self.methods:
             res = instance.get_method("__init__")
             if res.failed():
                 return res
             func = res.value
             news = _Scope(func.parent_scope, scopekind.FUNCTION)
-            news.add_symbol("self", instance)
+            news.add_symbol("self", obj)
             func.parent_scope = news
-            func.call(ctx, args)
-            obj = _Py_Object(objkind.USER_OBJECT, instance, True)
+            err = func.call(ctx, args)
+            if err != None:
+                return Result(None, err)
             return Result(obj, None)
         else:
             err = Error("object has no __init__ procedure", None)
@@ -89,7 +91,7 @@ class _User_Object_Instance:
     def __init__(self, template):
         # dicionario de tipo str->_Py_Object que contém as propriedades
         # do objeto
-        self.properties = None
+        self.properties = {}
         # dicionario de tipo str->_User_Function que contém os métodos
         # do objeto
         self.methods = template.methods
@@ -184,6 +186,14 @@ class _Scope:
         else:
             err = Error("name '"+name+"' not found", None)
             return Result(None, err)
+    def __str__(self):
+        out = ""
+        curr = self
+        while curr != None:
+            out += str(curr.dict)
+            out += "\n"
+            curr = curr.parent
+        return out
 
 # _Call_Node define um nó numa pilha de chamada
 class _Call_Node:
@@ -196,6 +206,9 @@ class _Call_Node:
         self.return_obj = None
         # ao retornar de uma função, é necessário ter acesso ao contexto pai
         self.parent = parent
+
+    def __str__(self):
+        return str(self.curr_scope.dict)
 
 class _Context:
     def __init__(self, source_map, call_node, builtin_scope):
@@ -249,6 +262,15 @@ class _Context:
         self.curr_call_node.parent.return_obj = obj
         self.is_returning = True
         return None
+
+    def __str__(self):
+        out = ""
+        curr = self.curr_call_node
+        while curr != None:
+            out += curr.__str__()
+            out += "\n"
+            curr = curr.parent
+        return out
 
 def _check_unif_bin(node, left_obj, right_obj):
     if left_obj.kind != right_obj.kind:
@@ -521,14 +543,16 @@ def _eval_call(ctx, node):
     elif thing.is_kind(objkind.BUILTIN_FUNC):
         res = thing.value.call(args)
         if res.failed():
-            res.error.range = node.range.copy()
+            if res.error.range == None:
+                res.error.range = node.range.copy()
             return res
         obj = res.value
         return Result(obj, None)
     elif thing.is_kind(objkind.USER_CLASS):
         res = thing.value.eval_init(ctx, args)
         if res.failed():
-            res.error.range = callee.range.copy()
+            if res.error.range == None:
+                res.error.range = callee.range.copy()
             return res
         obj = res.value
         return Result(obj, None)
@@ -541,8 +565,6 @@ def _eval_field_access(ctx, node):
     operand = node.leaves[1]
     res = _eval_expr(ctx, operand)
     if res.failed():
-        #print(ctx.curr_scope().dict)
-        #print(ctx.curr_call_node.parent.curr_scope.dict)
         return res
     obj = res.value
 
@@ -553,27 +575,29 @@ def _eval_field_access(ctx, node):
         return Result(None, err)
 
     name = field.value.text
-    if obj.is_kinds([objkind.MODULE]):
+    if obj.is_kind(objkind.MODULE):
         res = obj.value.get_global(name)
         if res.failed():
-            res.error.range = field.range.copy()
+            if res.error.range == None:
+                res.error.range = field.range.copy()
             return res
         return Result(res.value, None)
-    elif obj.is_kind([objkind.USER_OBJECT]):
+    elif obj.is_kind(objkind.USER_OBJECT):
         if name in obj.value.methods:
-            func = obj.value.get_method(name)
-            news = _Scope(func.parent, scopekind.FUNC)
+            func = obj.value.get_method(name).value
+            news = _Scope(func.parent_scope, scopekind.FUNCTION)
             news.add_symbol("self", obj)
-            func.parent = news
-            obj = _Py_Object(objkind.FUNC, func, False)
+            func.parent_scope = news
+            obj = _Py_Object(objkind.USER_FUNCTION, func, False)
         elif name in obj.value.properties:
-            obj = obj.value.get_attr(name)
+            obj = obj.value.get_attr(name).value
         else:
             err = Error("property not found", field.range.copy())
             return Result(err, None)
         return Result(obj, None)
     else:
-        err = Error("object has invalid type", obj.range.copy())
+        msg = "object has invalid type: " + objkind.to_str(obj.kind)
+        err = Error(msg, operand.range.copy())
         return Result(None, err)
 
 def _eval_index(ctx, node):
@@ -797,7 +821,7 @@ def _eval_lhs_field_access(ctx, lhs):
     op = lhs.leaves[1]
     field = lhs.leaves[0]
 
-    if field.kind != nodekind.TERMINAL or field.value != lexkind.ID:
+    if field.kind != nodekind.TERMINAL or field.value.kind != lexkind.ID:
         err = Error("field must be an identifier", field.range.copy())
         return Result(None, err)
 
@@ -809,25 +833,26 @@ def _eval_lhs_field_access(ctx, lhs):
     if obj.is_kinds([objkind.STR, objkind.DICT, objkind.NUM,
                      objkind.LIST, objkind.USER_FUNCTION,
                      objkind.BUILTIN_FUNC]):
-        err = Error("object has no properties", obj.range.copy())
+        err = Error("object has no properties", op.range.copy())
         return Result(None, err)
 
     if obj.is_kinds([objkind.MODULE]):
         err = Error("object is not mutable", lhs.range.copy())
         return Result(None, err)
 
-    if obj.is_kind([objkind.USER_OBJECT]):
+    if obj.is_kind(objkind.USER_OBJECT):
         name = field.value.text
         if name in obj.value.methods:
             err = Error("methods are not mutable", field.range.copy())
             return Result(None, err)
         elif name in obj.value.properties:
-            obj = obj.value.get_attr(name)
+            obj = obj.value.get_attr(name).value
         else:
             obj = obj.value.create_attr(name)
         return Result(obj, None)
     else:
-        err = Error("object has invalid type", obj.range.copy())
+        msg = "object has invalid type: " + objkind.to_str(obj.kind)
+        err = Error(msg, op.range.copy())
         return Result(None, err)
 
 # O lado esquerdo deve obedecer uma semantica mais estrita que o direito,

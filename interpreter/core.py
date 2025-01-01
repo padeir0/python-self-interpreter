@@ -6,6 +6,9 @@ import nodekind
 
 class Result:
     def __init__(self, value, error):
+        # GOD what wouldn't i do for static types :)
+        #if type(value) is Result:
+        #    raise
         self.value = value
         self.error = error
 
