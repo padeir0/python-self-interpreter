@@ -31,7 +31,7 @@ IdList = id {',' id} [','].
 
 While = 'while' Expr ':' NL >Block.
 
-If = 'if' Expr ':' NL >Block {Elif} [Else].
+If = 'if' Expr ':' NL >Block {:Elif} [:Else].
 Elif = 'elif' Expr ':' NL >Block.
 Else = 'else' ':' NL >Block.
 

@@ -315,7 +315,7 @@ def _if(parser):
         elifs = Node(None, nodekind.ELIF_LIST)
         elifs.leaves = _the_elifs
 
-    res = _else(parser)
+    res = _else(parser, kw.value.start_column())
     if res.failed():
         return res
     _the_else = res.value
@@ -378,10 +378,13 @@ def _elif(parser):
     return Result(n, None)
 
 # Else = 'else' ':' NL >Block.
-def _else(parser):
+def _else(parser, base_indent):
     parser.track("_else")
     if not parser.word_is(lexkind.ELSE):
         return Result(None, None)
+    if not parser.same_indent(base_indent):
+        return Result(None, None)
+
     res = parser.expect(lexkind.ELSE, "'else' keyword")
     if res.failed():
         return res
@@ -531,7 +534,7 @@ def _methods(parser):
     methods = []
 
     base_indent = parser.curr_indent()
-    while base_indent == parser.curr_indent():
+    while parser.same_indent(base_indent):
         if not parser.word_is(lexkind.DEF):
             err = parser.error("expected method")
             return Result(None, err)
