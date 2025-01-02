@@ -110,7 +110,7 @@ pelo primeiro token consumido por aquela produção.
 Quando escrevemos:
 
 ```ebnf
-Block: { :Statement NL }.
+Block = { :Statement NL }.
 ```
 
 Queremos dizer que o nível de indentação de cada `Statement`
@@ -121,7 +121,7 @@ que consome o primeiro token.
 Por outro lado, quando escrevemos:
 
 ```ebnf
-While: 'while' Expr ':' NL >Block.
+While = 'while' Expr ':' NL >Block.
 ```
 
 Queremos dizer que o nível de indentação da produção `Block` tem que estar

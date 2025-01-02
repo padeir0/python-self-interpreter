@@ -36,3 +36,5 @@ def to_str(kind):
         return "BOOL"
     elif kind == USER_CLASS:
         return "USER_CLASS"
+    else:
+        return "???"

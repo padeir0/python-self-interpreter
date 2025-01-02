@@ -5,6 +5,12 @@ def test():
         return False
     if str(123456) != "123456":
         return False
+    if str([1, 2, 3]) != "[1, 2, 3]":
+        return False
+    if str({"a":1, "b":2, "c":3}) != "{\"a\": 1, \"b\": 2, \"c\": 3}":
+        return False
+    if str(None) != "None":
+        return False
     return True
 
 if test():

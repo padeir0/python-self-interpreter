@@ -3,8 +3,8 @@ import nodekind
 from lexer import Lexer
 from core import Result, Node, Error
 
-def parse(string, track):
-    parser = _Parser(Lexer(string))
+def parse(modname, string, track):
+    parser = _Parser(Lexer(modname, string))
     if track:
         parser.start_tracking()
     parser.track("parser.parse")
@@ -26,7 +26,7 @@ class _Parser:
         lexer.next() # precisamos popular lexer.word
 
     def error(self, str):
-        return Error(str, self.lexer.word.range.copy())
+        return Error(self.lexer.modname, str, self.lexer.word.range.copy())
 
     def consume(self):
         if self.word_is(lexkind.INVALID):
@@ -44,12 +44,8 @@ class _Parser:
         return Result(None, err)
 
     def expect_many(self, kinds, text):
-        i = 0
-        while i < len(kinds):
-            kind = kinds[i]
-            if self.word_is(kind):
+        if self.word_is_one_of(kinds):
                 return self.consume()
-            i += 1
         err = self.error("expected " + text)
         return Result(None, err)
 
@@ -146,13 +142,7 @@ class _Parser:
             print(str)
 
     def word_is_one_of(self, kinds):
-        i = 0
-        while i < len(kinds):
-            kind = kinds[i]
-            if self.lexer.word.kind == kind:
-                return True
-            i += 1
-        return False
+        return self.lexer.word.kind in kinds
 
     def word_is(self, kind):
         return self.lexer.word.kind == kind
@@ -160,14 +150,14 @@ class _Parser:
     def curr_indent(self):
         return self.lexer.word.start_column()
 
-    def strict_indent(self):
-        return self.curr_indent() > self.indent
+    def same_indent(self, base_indent):
+        return self.curr_indent() == base_indent and not self.word_is(lexkind.EOF)
 
     def indent_prod(self, base_indent, production):
         prev_indent = self.indent
         self.indent = base_indent + 1
 
-        if not self.strict_indent():
+        if not self.curr_indent() > self.indent:
             err = self.error("invalid indentation")
             return Result(None, err)
 
@@ -177,7 +167,6 @@ class _Parser:
         out = res.value
         self.indent = prev_indent
         return Result(out, None)
-        
 
 # Block = { [Statement] NL }.
 # Statement = While  | If    | Atrib_Expr
@@ -188,7 +177,7 @@ def _block(parser):
     statements = []
 
     base_indent = parser.curr_indent()
-    while base_indent == parser.curr_indent() and not parser.word_is(lexkind.EOF):
+    while parser.same_indent(base_indent):
         res = None
         if parser.word_is(lexkind.WHILE):
             res = _while(parser)
@@ -316,7 +305,7 @@ def _if(parser):
         return res
     block = res.value
 
-    res = parser.repeat(_elif)
+    res = _elifs(parser, kw.value.start_column())
     if res.failed():
         return res
     _the_elifs = res.value
@@ -334,6 +323,27 @@ def _if(parser):
     n = Node(None, nodekind.IF)
     n.leaves = [exp, block, elifs, _the_else]
     return Result(n, None)
+
+def _elifs(parser, base_indent):
+    parser.track("_elifs")
+    if not parser.same_indent(base_indent):
+        return Result(None, None)
+
+    res = _elif(parser)
+    if res.failed() or res.value == None:
+        return res
+    e = res.value
+
+    elifs = [e]
+    while e != None and parser.same_indent(base_indent):
+        elifs += [e]
+
+        res = _elif(parser)
+        if res.failed():
+            return res
+        e = res.value
+
+    return Result(elifs, None)
 
 # Elif = 'elif' Expr ':' NL >Block.
 def _elif(parser):
@@ -822,13 +832,14 @@ def _dot_access(parser):
 #        | Dict | List.
 def _term(parser):
     parser.track("_term")
-    if parser.word_is_one_of([lexkind.SELF,
+    ok = parser.word_is_one_of([lexkind.SELF,
                         lexkind.NONE,
                         lexkind.TRUE,
                         lexkind.FALSE,
                         lexkind.ID,
                         lexkind.STR,
-                        lexkind.NUM]):
+                        lexkind.NUM])
+    if ok:
         return parser.consume()
     elif parser.word_is(lexkind.LEFT_BRACKET):
         return _list(parser)

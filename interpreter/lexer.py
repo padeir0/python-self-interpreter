@@ -14,13 +14,14 @@ def _is_ident(s):
     return _is_alpha(s) or _is_digit(s) or s == "_"
 
 class Lexer:
-    def __init__(self, string):
+    def __init__(self, modname, string):
         self.string = string
         self.start = 0
         self.end = 0
         self.range = Range(Position(0, 0), Position(0, 0))
         self.word = None
         self.peeked = None
+        self.modname = modname
 
     def next(self):
         if self.peeked != None:
@@ -270,14 +271,19 @@ class Lexer:
             self._next_rune()
             r = self._peek_rune()
         ok = True
+
         while ok:
+            if r in ["", "\n"]:
+                return self._emit(lexkind.INVALID)
+
             if r == "\\":
                 self._next_rune()
                 r = self._peek_rune()
-                if not r in ["n", "\"", "\\"]:
+                if not (r in ["n", "\"", "\\"]):
                     return self._emit(lexkind.INVALID)
             elif r == "\"":
                 ok = False
+
             self._next_rune()
             r = self._peek_rune()
         # remove delimitadores

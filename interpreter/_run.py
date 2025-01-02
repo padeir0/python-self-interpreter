@@ -65,6 +65,22 @@ def get_root_dir(file_path):
     else:
         return None
 
+def parse_file(file_path):
+    if not file_path.endswith(".py"):
+        print("not a python file")
+        return None
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            modname = file[:len(file)-3] # remove ".py"
+            file_contents = f.read()
+            res = parse(modname, file_contents, False)
+            if res.failed():
+                print(res.error)
+            else:
+                print(res.value)
+    except Exception as e:
+        print(f"Could not read file {file_path}: {e}")
+
 def run_single_file(file_path):
     if not file_path.endswith(".py"):
         print("not a python file")
@@ -77,13 +93,13 @@ def run_single_file(file_path):
     modname = modname[:len(modname)-3] # remove ".py"
     files = get_python_files(root)
     builtins = create_builtin_scope()
-    err = evaluate(builtins, files, modname)
+    err = evaluate(builtins, files, modname, False)
     if err != None:
         e = err.copy()
         e.correct_editor_view() 
         print(e)
-        code = files[modname]
-        if err.range != None:
+        if e.module != "" and err.range != None:
+            code = files[e.module]
             print(extract_offense(err.range, code))
 
 def get_python_file_names(directory_path):
@@ -110,6 +126,9 @@ if __name__ == "__main__":
         if keyword == "test":
             folder = sys.argv[2]
             test_whole_dir(folder)
+        elif keyword == "parse":
+            file = sys.argv[2]
+            parse_file(file)
         else:
             print("invalid parameters")
     else:

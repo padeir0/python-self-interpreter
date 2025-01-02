@@ -9,10 +9,15 @@ def _str_dict(dict):
     while i < len(keys):
         key = keys[i]
         value = dict.value[key]
-        out += str(key) + ":" + _str_obj(value)
+        key_str = str(key)
+        if type(key) is str:
+            key_str = "\"" + key_str + "\""
+        out += key_str + ": " + _str_obj(value)
         if i + 1 < len(keys):
             out += ", "
         i += 1
+    out += "}"
+    return out
 
 def _str_list(list):
     i = 0
@@ -49,7 +54,7 @@ def _str_obj(obj):
     elif obj.is_kind(objkind.NONE):
         return "None"
     elif obj.is_kind(objkind.USER_CLASS):
-        return "class<" + obj.value.name + ">"
+        return "class<" +obj.value.name+ ">" + str(obj.value)
     else:
         return "<unknown>"
 
@@ -73,12 +78,11 @@ def _int_wrapper(obj):
     return _obj_none()
 
 def _str_wrapper(obj):
-    if obj.is_kind(objkind.NUM):
-        try:
-            value = str(obj.value)
-            return _Py_Object(objkind.STR, value, False)
-        except:
-            pass
+    try:
+        value = _str_obj(obj)
+        return _Py_Object(objkind.STR, value, False)
+    except:
+        pass
     return _obj_none()
 
 def _len_wrapper(obj):

@@ -67,19 +67,20 @@ class Range:
         self.end.correct_editor_view()
 
 class Error:
-    def __init__(self, string, range):
+    def __init__(self, module, string, range):
+        self.module = module
         self.message = string
         self.range = range
     def __str__(self):
         if self.range != None:
-            return "error " + self.range.__str__() + ": "+ self.message
+            return "error " + self.module +":"+ self.range.__str__() + ": "+ self.message
         else:
-            return "error: " + self.message
+            return "error "+ self.module +": " + self.message
     def copy(self):
         if self.range != None:
-            return Error(self.message, self.range.copy())
+            return Error(self.module, self.message, self.range.copy())
         else:
-            return Error(self.message, None)
+            return Error(self.module, self.message, None)
     def correct_editor_view(self):
         if self.range != None:
             self.range.correct_editor_view()
@@ -105,7 +106,7 @@ class Node:
         self.range = None
 
     def add_leaf(self, leaf):
-        self.leaves += [leaf];
+        self.leaves += [leaf]
 
     def left(self):
         return self.leaves[0]
@@ -116,18 +117,12 @@ class Node:
         return self.value.kind == kind
 
     def has_lexkinds(self, kinds):
-        i = 0
-        while i < len(kinds):
-            kind = kinds[i]
-            if self.value.kind == kind:
-                return True
-            i += 1
-        return False
+        return self.value.kind in kinds
 
     def compute_range(self):
         if self.kind == nodekind.TERMINAL:
             self.range = self.value.range.copy()
-            return;
+            return None
         self.range = Range(Position(0, 0), Position(0, 0))
         i = 0
         while i < len(self.leaves):
