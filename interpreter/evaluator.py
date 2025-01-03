@@ -587,6 +587,8 @@ def _eval_list(ctx, node):
     return Result(obj, None)
 
 def _eval_call(ctx, node):
+    if ctx.verbose:
+        print("_eval_call")
     exprlist = node.leaves[0]
     callee = node.leaves[1]
 
@@ -1156,6 +1158,8 @@ def _eval_if(ctx, node):
     return None
 
 def _eval_sttm(ctx, node):
+    if ctx.verbose:
+        print("_eval_sttm")
     if node.kind == nodekind.IMPORT:
         return _eval_import(ctx, node)
     elif node.kind == nodekind.FROM_IMPORT:
@@ -1181,6 +1185,8 @@ def _eval_sttm(ctx, node):
         return res.error
 
 def _eval_block(ctx, node):
+    if ctx.verbose:
+        print("_eval_block")
     i = 0
     while i < len(node.leaves) and not ctx.is_returning:
         sttm = node.leaves[i]
@@ -1198,7 +1204,7 @@ def _eval_module(ctx, name):
         return Result(None, err)
     source = ctx.source_map[name]
 
-    res = parse(name, source, ctx.verbose)
+    res = parse(name, source, False)
     if res.failed():
         return Result(None, res.error)
     n = res.value

@@ -1,5 +1,6 @@
 import scopekind
 import objkind
+from parser import parse
 from evaluator import _Scope, _Builtin_Func, _Py_Object, evaluate
 from lexer import Lexer
 
@@ -48,16 +49,17 @@ modmap = {
     "main": "print(\"Hello, World!\")\n",
 }
 
-print("SELF TEST")
+res = parse("main", "print(\"Hello, World!\")\n", True)
+if res.failed():
+    print(res.error)
+else:
+    print(res.value.__str__())
 
-tks = Lexer("main", "print(\"Hello, World!\")\n").all_tokens()
-i = 0
-while i < len(tks):
-    print(tks[i].__str__())
-    i += 1
-
-# err = evaluate(builtins, modmap, "main", True)
-# if err != None:
-#     e = err.copy()
-#     e.correct_editor_view() 
-#     print(e.__str__())
+#print("eval begin")
+#err = evaluate(builtins, modmap, "main", True)
+#if err != None:
+#    e = err.copy()
+#    e.correct_editor_view() 
+#    print(e.__str__())
+#else:
+#    print("eval end")
