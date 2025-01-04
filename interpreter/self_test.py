@@ -45,21 +45,56 @@ builtins.add_symbol("int", _create_func(_int_wrapper))
 builtins.add_symbol("str", _create_func(_str_wrapper))
 builtins.add_symbol("len", _create_func(_len_wrapper))
 
+program = "def generation(prev, curr):\n"
+program += "    i = 1\n"
+program += "    while i < len(prev)-1:\n"
+program += "        curr[i] = rule(prev, i)\n"
+program += "        i += 1\n"
+program += "    return curr\n"
+program += "rulemap = {\n"
+program += "    \"   \": \" \",\n"
+program += "    \"O  \": \" \",\n"
+program += "    \" O \": \"O\",\n"
+program += "    \"  O\": \"O\",\n"
+program += "    \"OO \": \"O\",\n"
+program += "    \"O O\": \"O\",\n"
+program += "    \" OO\": \"O\",\n"
+program += "    \"OOO\": \" \",\n"
+program += "}\n"
+program += "def rule(prev, i):\n"
+program += "    chunk = make_str(prev[i-1:i+2])\n"
+program += "    return rulemap[chunk]\n"
+program += "def make_array(str):\n"
+program += "    out = []\n"
+program += "    i = 0\n"
+program += "    while i < len(str):\n"
+program += "        out += [str[i]]\n"
+program += "        i += 1\n"
+program += "    return out\n"
+program += "def make_str(chunk):\n"
+program += "    out = \"\"\n"
+program += "    i = 0\n"
+program += "    while i < len(chunk):\n"
+program += "        out += chunk[i]\n"
+program += "        i += 1\n"
+program += "    return out\n"
+program += "A = make_array(\"                                O \")\n"
+program += "B = make_array(\"                                  \")\n"
+program += "i = 0\n"
+program += "while i < 32:\n"
+program += "    print(make_str(A))\n"
+program += "    B = generation(A, B)\n"
+program += "    C = A\n"
+program += "    A = B\n"
+program += "    B = C\n"
+program += "    i += 1\n"
+
 modmap = {
-    "main": "print(\"Hello, World!\")\n",
+    "main": program,
 }
 
-res = parse("main", "print(\"Hello, World!\")\n", True)
-if res.failed():
-    print(res.error)
-else:
-    print(res.value.__str__())
-
-#print("eval begin")
-#err = evaluate(builtins, modmap, "main", True)
-#if err != None:
-#    e = err.copy()
-#    e.correct_editor_view() 
-#    print(e.__str__())
-#else:
-#    print("eval end")
+err = evaluate(builtins, modmap, "main", False)
+if err != None:
+    e = err.copy()
+    e.correct_editor_view() 
+    print(e.__str__())

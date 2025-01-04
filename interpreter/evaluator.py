@@ -342,14 +342,15 @@ def _eq_list(a, b):
     return True
 
 def _eval_identity(ctx, left_obj, right_obj, node):
-    if left_obj.kind != right_obj.kind:
-        obj = _Py_Object(objkind.BOOL, False, True)
-        return Result(obj, None)
     if left_obj.kind == objkind.DICT:
         err = ctx.error("map has no identity", node)
         return Result(None, err)
 
-    out = _identity(left_obj, right_obj)
+    if left_obj.kind != right_obj.kind:
+        out = False
+    else:
+        out = _identity(left_obj, right_obj)
+
     if node.has_lexkind(lexkind.DIFF):
         out = not out
 

@@ -8,6 +8,8 @@ def parse(modname, string, track):
     if track:
         parser.start_tracking()
     parser.track("parser.parse")
+
+    _discard_nl(parser)
     res = _block(parser)
     if res.failed():
         return res
@@ -155,9 +157,9 @@ class _Parser:
 
     def indent_prod(self, base_indent, production):
         prev_indent = self.indent
-        self.indent = base_indent + 1
+        self.indent = base_indent
 
-        if not self.curr_indent() > self.indent:
+        if not (self.curr_indent() > self.indent):
             err = self.error("invalid indentation")
             return Result(None, err)
 
@@ -326,19 +328,16 @@ def _if(parser):
 
 def _elifs(parser, base_indent):
     parser.track("_elifs")
-    if not parser.same_indent(base_indent):
-        return Result(None, None)
-
-    res = _elif(parser)
+    res = _elif(parser, base_indent)
     if res.failed() or res.value == None:
         return res
     e = res.value
 
-    elifs = [e]
-    while e != None and parser.same_indent(base_indent):
+    elifs = []
+    while e != None:
         elifs += [e]
 
-        res = _elif(parser)
+        res = _elif(parser, base_indent)
         if res.failed():
             return res
         e = res.value
@@ -346,9 +345,11 @@ def _elifs(parser, base_indent):
     return Result(elifs, None)
 
 # Elif = 'elif' Expr ':' NL >Block.
-def _elif(parser):
+def _elif(parser, base_indent):
     parser.track("_elif")
     if not parser.word_is(lexkind.ELIF):
+        return Result(None, None)
+    if not parser.same_indent(base_indent):
         return Result(None, None)
 
     res = parser.expect(lexkind.ELIF, "'elif' keyword")
@@ -641,7 +642,8 @@ def _arg(parser):
 # Expr = And {'or' And}.
 def _expr(parser):
     parser.track("_expr")
-    return parser.repeat_binary(_and, _or_op)
+    res = parser.repeat_binary(_and, _or_op)
+    return res
 
 # And = Comp {'and' Comp}.
 def _and(parser):

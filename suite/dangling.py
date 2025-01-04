@@ -2,8 +2,6 @@ def a():
     if False:
         if True:
             return False
-        else:
-            return False
     else:
         return True
     return False
