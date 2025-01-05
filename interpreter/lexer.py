@@ -249,6 +249,8 @@ class Lexer:
             return self._emit(lexkind.ELSE)
         elif s == "in":
             return self._emit(lexkind.IN)
+        elif s == "do":
+            return self._emit(lexkind.DO)
         elif s == "while":
             return self._emit(lexkind.WHILE)
         elif s == "return":

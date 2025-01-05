@@ -1,4 +1,6 @@
-from lib import The_Object, square, PI_E42
+from lib import The_Object,
+                square,
+                PI_E42
 
 def test():
     if The_Object(3).value != 3:

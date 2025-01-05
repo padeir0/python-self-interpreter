@@ -1092,28 +1092,56 @@ def _eval_aug_assign(ctx, node):
         else:
             return ctx.error("invalid lexkind for augmented assign", node)
 
-def _eval_while(ctx, node):
+def _eval_do(ctx, node):
     expr = node.leaves[0]
     block = node.leaves[1]
 
-    res = _eval_expr(ctx, expr)
-    if res.failed():
-        return res.error
-    cond = res.value
-
-    if not cond.is_kind(objkind.BOOL):
-        err = ctx.error("expression is not a boolean", expr)
-        return err
-
-    while cond.value and not ctx.is_returning:
+    loop = True
+    while loop:
         err = _eval_block(ctx, block)
         if err != None:
             return err
 
+        if ctx.is_returning:
+            loop = False
+        else:
+            res = _eval_expr(ctx, expr)
+            if res.failed():
+                return res.error
+            obj = res.value
+
+            if not obj.is_kind(objkind.BOOL):
+                err = ctx.error("expression is not a boolean", expr)
+                return err
+            loop = obj.value
+    
+    return None
+
+def _eval_while(ctx, node):
+    expr = node.leaves[0]
+    block = node.leaves[1]
+
+    loop = True
+    while loop:
         res = _eval_expr(ctx, expr)
         if res.failed():
             return res.error
-        cond = res.value
+        obj = res.value
+
+        if not obj.is_kind(objkind.BOOL):
+            err = ctx.error("expression is not a boolean", expr)
+            return err
+        cond = obj.value
+
+        if cond:
+            err = _eval_block(ctx, block)
+            if err != None:
+                return err
+            if ctx.is_returning:
+                loop = False
+        else:
+            loop = False
+
     
     return None
 
@@ -1173,6 +1201,8 @@ def _eval_sttm(ctx, node):
         return _eval_aug_assign(ctx, node)
     elif node.kind == nodekind.WHILE:
         return _eval_while(ctx, node)
+    elif node.kind == nodekind.DO:
+        return _eval_do(ctx, node)
     elif node.kind == nodekind.IF:
         return _eval_if(ctx, node)
     elif node.kind == nodekind.RETURN:

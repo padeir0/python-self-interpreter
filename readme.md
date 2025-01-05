@@ -19,16 +19,17 @@ Module = Block.
 Block = { :Statement NL }.
 NL = nl {nl}.
 
-Statement = While  | If    | Atrib_Expr
-          | Return | Class | Func
+Statement = While  | DoWhile | If  | Atrib_Expr
+          | Return | Class   | Func
           | Import | FromImport | Pass.
 
 Pass = 'pass'.
 
 Import = 'import' IdList.
 FromImport = 'from' id 'import' IdList.
-IdList = id {',' id} [','].
+IdList = id {CommaNL id} [CommaNL].
 
+DoWhile = 'do'':' NL >Block 'while' Expr.
 While = 'while' Expr ':' NL >Block.
 
 If = 'if' Expr ':' NL >Block {:Elif} [:Else].
@@ -47,10 +48,9 @@ Arguments = '(' [NL] [ArgList] ')'.
 ArgList = Arg {CommaNL Arg} [CommaNL].
 Arg = 'self' | id.
 
-MultiLine_ExprList = Expr {CommaNL Expr} [CommaNL].
+ExprList = Expr {CommaNL Expr} [CommaNL].
 CommaNL = ',' [NL].
 
-ExprList = Expr {',' Expr} [','].
 Expr = And {'or' And}.
 And = Comp {'and' Comp}.
 Comp = Sum {compOp Sum}.
@@ -69,10 +69,10 @@ prefix = 'not' | '-'.
 Suffix = Call
        | DotAccess
        | Index.
-Call = '(' [NL] [MultiLine_ExprList] ')'.
+Call = '(' [NL] [ExprList] ')'.
 Index = '[' [NL] Expr [':' Expr] ']'.
 DotAccess = '.' id.
-List = '[' [NL] MultiLine_ExprList ']'.
+List = '[' [NL] ExprList ']'.
 Dict = '{' [NL] KeyValue_List '}'.
 
 KeyValue_List = KeyValue_Expr {CommaNL KeyValue_Expr} [CommaNL].
@@ -131,8 +131,9 @@ da produção `While` é definida pela palavra chave `'while'`.
 ## Ideia geral
 
 O interpretador vai expor apenas uma função `evaluate`
-que toma um dicionário de strings para strings e uma string,
-ie, algo tipo `evaluate(dict:str->str, name:str)` se python tivesse tipos.
+que toma um escopo de funções built-in, um dicionário de módulos e uma string,
+ie, algo tipo `evaluate(builtin:scope, dict:str->str, name:str, verbose:bool)`
+se python tivesse tipos estáticos.
 
 O parametro `name` tem de estar em `dict`, e `dict[name]`
 vai ser o módulo pelo qual o interpretador começa a executar.

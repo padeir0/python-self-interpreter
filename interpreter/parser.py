@@ -103,25 +103,8 @@ class _Parser:
         return Result(list, None)
 
     # implements:
-    #    Production {',' Production} [','].
-    def repeat_comma_list(self, production):
-        res = production(self)
-        if res.failed() or res.value == None:
-            return res
-        list = [res.value]
-        while self.word_is(lexkind.COMMA):
-            self.lexer.next()
-            res = production(self)
-            if res.failed():
-                return res
-            if res.value == None:
-                return Result(list, None)
-            list += [res.value]
-        return Result(list, None)
-
-    # implements:
     #    Production {[CommaNL] Production} [CommaNL].
-    def repeat_multiline_comma_list(self, production):
+    def repeat_comma_list(self, production):
         res = production(self)
         if res.failed() or res.value == None:
             return res
@@ -183,6 +166,8 @@ def _block(parser):
         res = None
         if parser.word_is(lexkind.WHILE):
             res = _while(parser)
+        elif parser.word_is(lexkind.DO):
+            res = _do(parser)
         elif parser.word_is(lexkind.IF):
             res = _if(parser)
         elif parser.word_is(lexkind.RETURN):
@@ -278,6 +263,39 @@ def _while(parser):
     block = res.value
 
     n = Node(None, nodekind.WHILE)
+    n.leaves = [exp, block]
+    return Result(n, None)
+
+# DoWhile = 'do'':' NL >Block 'while' Expr.
+def _do(parser):
+    parser.track("_do")
+    res = parser.expect(lexkind.DO, "'do' keyword")
+    if res.failed():
+        return res
+    kw = res.value
+
+    res = parser.expect(lexkind.COLON, "a colon ':'")
+    if res.failed():
+        return res
+    res = _NL(parser)
+    if res.failed():
+        return res
+
+    res = parser.indent_prod(kw.value.start_column(), _block)
+    if res.failed():
+        return res
+    block = res.value
+
+    res = parser.expect(lexkind.WHILE, "'while' keyword")
+    if res.failed():
+        return res
+
+    res = parser.expect_prod(_expr, "expression")
+    if res.failed():
+        return res
+    exp = res.value
+
+    n = Node(None, nodekind.DO)
     n.leaves = [exp, block]
     return Result(n, None)
 
@@ -408,17 +426,7 @@ def _else(parser, base_indent):
     n.leaves = [block]
     return Result(n, None)
 
-# MultiLine_ExprList = Expr {CommaNL Expr} [CommaNL].
-def _multiline_expr_list(parser):
-    parser.track("_multiline_expr_list")
-    res = parser.repeat_multiline_comma_list(_expr)
-    if res.failed() or res.value == None:
-        return res
-    n = Node(None, nodekind.EXPR_LIST)
-    n.leaves = res.value
-    return Result(n, None)
-
-# ExprList = Expr {',' Expr} [','].
+# ExprList = Expr {CommaNL Expr} [CommaNL].
 def _expr_list(parser):
     parser.track("_expr_list")
     res = parser.repeat_comma_list(_expr)
@@ -449,7 +457,7 @@ def _id(parser):
         return parser.consume()
     return Result(None, None)
 
-# IdList = id {',' id} [','].
+# IdList = id {CommaNL id} [CommaNL].
 def _id_list(parser):
     parser.track("_idlist")
     res = parser.repeat_comma_list(_id)
@@ -623,7 +631,7 @@ def _arguments(parser):
 # ArgList = Arg {CommaNL Arg} [CommaNL].
 def _arg_list(parser):
     parser.track("_arg_list")
-    res = parser.repeat_multiline_comma_list(_arg)
+    res = parser.repeat_comma_list(_arg)
     if res.failed() or res.value == None:
         return res
     n = Node(None, nodekind.ARG_LIST)
@@ -753,7 +761,7 @@ def _suffix(parser):
     else:
         return Result(None, None)
 
-# Call = '(' [NL] [MultiLine_ExprList] ')'.
+# Call = '(' [NL] [ExprList] ')'.
 def _call(parser):
     parser.track("_call")
     res = parser.expect(lexkind.LEFT_PAREN, "left parenthesis '('")
@@ -763,7 +771,7 @@ def _call(parser):
         res = _NL(parser)
         if res.failed():
             return res
-    res = _multiline_expr_list(parser)
+    res = _expr_list(parser)
     if res.failed():
         return res
     args = res.value
@@ -879,7 +887,7 @@ def _dict(parser):
 
 # KeyValue_List = KeyValue_Expr {CommaNL KeyValue_Expr} [CommaNL].
 def _key_value_list(parser):
-    res = parser.repeat_multiline_comma_list(_key_value_expr)
+    res = parser.repeat_comma_list(_key_value_expr)
     if res.failed() or res.value == None:
         return res
     n = Node(None, nodekind.KEY_VALUE_LIST)
@@ -908,7 +916,7 @@ def _key_value_expr(parser):
         return Result(n, None)
     return Result(key, None)
 
-# List = '[' [NL] MultiLine_ExprList ']'.
+# List = '[' [NL] ExprList ']'.
 def _list(parser):
     res = parser.expect(lexkind.LEFT_BRACKET, "left bracket '['")
     if res.failed():
@@ -917,7 +925,7 @@ def _list(parser):
         res = _NL(parser)
         if res.failed():
             return res
-    res = _multiline_expr_list(parser)
+    res = _expr_list(parser)
     if res.failed():
         return res
     expr_list = res.value

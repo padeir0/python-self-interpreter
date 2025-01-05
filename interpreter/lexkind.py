@@ -14,6 +14,7 @@ NONE = 9
 IF = 10
 ELIF = 11
 ELSE = 12
+DO = 50
 WHILE = 14
 RETURN = 15
 DEF = 16
