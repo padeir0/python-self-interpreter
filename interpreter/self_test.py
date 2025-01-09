@@ -2,7 +2,6 @@ import scopekind
 import objkind
 from parser import parse
 from evaluator import _Scope, _Builtin_Func, _Py_Object, evaluate
-from lexer import Lexer
 
 def _str_obj(obj):
     if obj.is_kind(objkind.MODULE):
