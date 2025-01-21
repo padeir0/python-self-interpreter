@@ -1,0 +1,147 @@
+\section{Gramática}
+
+Antes de definirmos as estruturas gramaticais,
+precisamos primeiramente definir quais caracteres
+podem ser ignorados. Para isso, definimos a produção
+\verb|WhiteSpace|, que inclui espaços, \textit{carriage returns}
+e comentários.
+\index{whitespace}
+
+\begin{lstlisting}
+WhiteSpace = ' ' | '\r' | Comment.
+Comment = '#' {ascii} nl.
+nl = '\n'.
+\end{lstlisting}
+
+\index{statement}
+Cada módulo em Python é simplesmente um bloco de código,
+e blocos são sequências de \textit{statements} justificados.
+A tradução de \textit{statement} para português é difícil,
+mas é melhor aproximada pela palavra \textit{instrução}.
+
+\begin{lstlisting}
+Module = Block.
+Block = { :Statement NL }.
+NL = nl {nl}.
+\end{lstlisting}
+
+\index{nova linha} \index{line break}
+\noindent Veja que definimos \verb|NL|
+(leia como: \textbf{N}ova \textbf{L}inha)
+permitindo que em qualquer lugar que ocorra uma nova linha,
+possam ocorrer outras em sequência. Em \texttt{CPython},
+linhas em branco não emitem tokens de nova-linha
+\cite{blank_lines}, isso é uma heurística que não precisamos
+adotar.
+
+A definição de \verb|Statement| é complexa e é
+quebrada em várias subproduções.
+
+\begin{lstlisting}
+Statement = While  | DoWhile | If  | Atrib_Expr
+          | Return | Class   | Func
+          | Import | FromImport | Pass.
+
+Pass = 'pass'.
+
+Import = 'import' IdList.
+FromImport = 'from' id 'import' IdList.
+IdList = id {CommaNL id} [CommaNL].
+
+DoWhile = 'do'':' NL >Block 'while' Expr.
+While = 'while' Expr ':' NL >Block.
+
+If = 'if' Expr ':' NL >Block {:Elif} [:Else].
+Elif = 'elif' Expr ':' NL >Block.
+Else = 'else' ':' NL >Block.
+
+Atrib_Expr = Expr [assign_Op Expr].
+assign_Op = '=' | '+=' | '-=' | '*=' | '/=' | '%='.
+
+Return = 'return' Expr.
+
+Class = 'class' id ':' NL >Methods.
+Methods = {:Func}.
+
+Func = 'def' id Arguments ':' NL >Block.
+Arguments = '(' [NL] [ArgList] ')'.
+ArgList = Arg {CommaNL Arg} [CommaNL].
+Arg = 'self' | id.
+\end{lstlisting}
+
+Uma estratégia usada acima, que também é usada na
+produção a seguir, permite que a sintaxe aceite
+listas em múltiplas linhas.
+Para permitir essas listas,
+\texttt{CPython} faz com que o lexer pare de emitir tokens
+de nova-linha dentro de delimitadores
+\cite{implicit_line_joining}, isso é outra heurística
+que não precisamos adotar.
+\index{\texttt{CPython}}
+\index{implicit line joining}
+
+\begin{lstlisting}
+ExprList = Expr {CommaNL Expr} [CommaNL].
+CommaNL = ',' [NL].
+\end{lstlisting}
+
+\index{Pascal}
+Por fim, finalmente definimos a sintaxe de uma expressão.
+Note que a precedência dos operadores está diretamente
+embutida na gramática. Essa estratégia foi disseminada
+por Wirth nas gramáticas de \texttt{Pascal}, e permite uma
+quantidade limitada de níveis de precedência sem a necessidade
+de usar tabelas de precedência.
+
+\begin{lstlisting}
+Expr = And {'or' And}.
+And = Comp {'and' Comp}.
+Comp = Sum {compOp Sum}.
+compOp = '==' | '!=' | '>' | '>=' | '<' | '<=' | 'in'.
+Sum = Mult {sumOp Mult}.
+sumOp = '+' | '-'.
+Mult = UnaryPrefix {multOp UnaryPrefix}.
+multOp = '*' | '/' | '%'.
+UnaryPrefix = {Prefix} UnarySuffix.
+UnarySuffix = Term {Suffix}.
+Term = 'self' | 'None' | bool | num
+       | str  | id     | NestedExpr
+       | Dict | List.
+NestedExpr = '(' Expr ')'.
+\end{lstlisting}
+
+Descrevemos indexação e chamadas de função
+como operadores unários de sufixo. 
+
+\begin{lstlisting}
+prefix = 'not' | '-'.
+Suffix = Call
+       | DotAccess
+       | Index.
+Call = '(' [NL] [ExprList] ')'.
+Index = '[' [NL] Expr [':' Expr] ']'.
+DotAccess = '.' id.
+List = '[' [NL] ExprList ']'.
+Dict = '{' [NL] KeyValue_List '}'.
+
+KeyValue_List = KeyValue_Expr {CommaNL KeyValue_Expr} [CommaNL].
+KeyValue_Expr = Expr [':' Expr].
+\end{lstlisting}
+
+\index{literais}
+Por fim, definimos os literais, abusando de expressões
+regulares.
+
+\begin{lstlisting}
+bool = 'True' | 'False'.
+num = /[0-9]+/.
+str = '"' insideString* '"'.
+insideString = ascii | escapes.
+escapes = '\\n' | '\\"'
+id = /[a-zA-Z_][a-zA-Z0-9_]*/.
+\end{lstlisting}
+
+Veja que, por causa das complexidades de verificar as regras de
+indentação quando tabs estão envolvidas \cite{tab_error},
+essas são completamente proibidas no código fonte.
+\index{tabs}

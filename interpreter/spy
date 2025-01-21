@@ -1,5 +1,6 @@
 #!/bin/python
 from parser import parse
+from lexer import lex
 from evaluator import evaluate
 from _builtins import create_builtin_scope
 import os
@@ -81,6 +82,20 @@ def parse_file(file_path):
     except Exception as e:
         print(f"Could not read file {file_path}: {e}")
 
+def lex_file(file_path):
+    if not file_path.endswith(".py"):
+        print("not a python file")
+        return None
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            modname = file[:len(file)-3] # remove ".py"
+            file_contents = f.read()
+            tks = lex(modname, file_contents)
+            for tk in tks:
+                print(tk)
+    except Exception as e:
+        print(f"Could not read file {file_path}: {e}")
+
 def run_single_file(file_path):
     if not file_path.endswith(".py"):
         print("not a python file")
@@ -129,6 +144,9 @@ if __name__ == "__main__":
         elif keyword == "parse":
             file = sys.argv[2]
             parse_file(file)
+        elif keyword == "lex":
+            file = sys.argv[2]
+            lex_file(file)
         else:
             print("invalid parameters")
     else:

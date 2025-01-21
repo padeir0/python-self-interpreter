@@ -1,0 +1,78 @@
+\section{Lexing}
+
+Com a finalidade de gerar lexemas a partir dos 
+caracteres do código fonte, criamos uma máquina de estado
+chamada \textit{lexer}.
+\index{lexer} \index{máquina de estado}
+
+\begin{lstlisting}
+class Lexer:
+    def __init__(self, modname, string):
+        self.string = string
+        self.start = 0
+        self.end = 0
+        self.range = Range(Position(0, 0), Position(0, 0))
+        self.word = None
+        self.peeked = None
+        self.modname = modname
+\end{lstlisting}
+
+O método principal do lexer é o \verb|Lexer.next|. Esse método,
+replicado logo em seguida, é responsável por consumir um lexema
+do código fonte e coloca-lo em \verb|Lexer.word|.
+
+\begin{lstlisting}
+def next(self):
+    if self.peeked != None:
+        self.word = self.peeked
+        self.peeked = None
+    else:
+        self.word = self._any()
+    self._advance()
+    return self.word
+\end{lstlisting}
+
+Veja que, na linha 6, o retorno do método \verb|self._any|
+é atribuído a \verb|self.word|. É nesse método que se encontra
+a máquina de estado, implementada como uma longa sequência
+de \verb|if|s.
+
+\begin{lstlisting}
+def _any(self):
+    self._ignore_whitespace()
+    r = self._peek_rune()
+    if _is_digit(r):
+        return self._number()
+    elif _is_ident_start(r):
+        return self._identifier()
+    elif r == "\"":
+    ...
+\end{lstlisting}
+
+\noindent Não reproduzimos todo o código aqui por ser longo
+demais, mas sua estrutura não é complexa: é apenas uma máquina
+de estado.
+
+Veja que \verb|Lexer.start| e \verb|Lexer.end| marcam,
+respectivamente, o começo e o final de cada lexema. Usamos esses
+dois no método \verb|_emit|:
+\index{lexema}
+
+\begin{lstlisting}
+def _emit(self, kind):
+    s = self.string[self.start:self.end]
+    return Lexeme(s, kind, self.range.copy())
+\end{lstlisting}
+
+\noindent Além disso, para avançar no input,
+resetamos esses campos no método \verb|_advance|.
+
+\begin{lstlisting}
+def _advance(self):
+    self.start = self.end
+    self.range.start = self.range.end.copy()
+\end{lstlisting}
+
+\index{on-demand-scanner}
+Desse jeito, o lexer funciona de acordo com a demanda do
+parser, isto é: ele só consome um lexema se o parser pedir.

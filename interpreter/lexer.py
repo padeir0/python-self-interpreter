@@ -13,6 +13,9 @@ def _is_ident_start(s):
 def _is_ident(s):
     return _is_alpha(s) or _is_digit(s) or s == "_"
 
+def lex(modname, string):
+    return Lexer(modname, string).all_tokens()
+
 class Lexer:
     def __init__(self, modname, string):
         self.string = string
@@ -40,7 +43,7 @@ class Lexer:
     def all_tokens(self):
         all = []
         l = self.next()
-        while l.kind != lexkind.EOF:
+        while not (l.kind in [lexkind.EOF, lexkind.INVALID]):
             all += [l]
             l = self.next()
         return all

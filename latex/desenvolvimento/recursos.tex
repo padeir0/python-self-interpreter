@@ -1,0 +1,23 @@
+\section{Recursos}
+
+Os arquivos do projeto são separados em dois grupos.
+
+\index{CPython}
+\index{recursos}
+O primeiro grupo só roda com \texttt{CPython} e usa
+as bibliotecas \verb|os| e \verb|sys|, bem como as
+funções embutidas \verb|len| e \verb|print| e os
+construtores e métodos das classes \verb|int| e \verb|str|.
+
+O segundo grupo roda tanto em \texttt{CPython} quanto
+no nosso interpretador e é ainda mais restrita nos recursos
+que usa: é limitada apenas às funções
+\verb|len| e \verb|print| e os
+construtores das classes embutidas \verb|int| e \verb|str|.
+Não foram utilizados métodos das classes embutidas.
+
+\index{iteradores} \index{tuplas} \index{números decimais}
+Além do mais, o segundo grupo implementa apenas dicionários,
+listas, strings, inteiros, boleanos e \verb|None|. Não usamos
+iteradores, conjuntos, tuplas, números decimais
+e qualquer outra coisa que extra do \texttt{CPython}.

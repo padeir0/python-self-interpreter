@@ -1,0 +1,33 @@
+\chapter{Preliminares}
+
+Antes da formalização da matemática em cima da teoria
+de conjuntos, um conceito crucial que permanecia intuitivo
+e informal era a ideia de uma "função computável".
+Apesar disso, nos sistemas de lógica propostos por Hilbert,
+um conjunto de axiomas era válido se, e somente se existisse
+uma "função computável" para decidir se uma sentença
+lógica era um axioma ou não (isto é, o conjunto de axiomas
+tem que ser obrigatoriamente um \textit{conjunto computável})
+\cite{godelIncompletenessHilbert} \cite{churchTuring}.
+
+\index{Máquina de Turing}
+Turing criou a Máquina de Turing em 1937 \cite{Turing1937}
+justamente para formalizar a intuição de "função computável".
+Ele não foi o único a tentar formalizar essa ideia:
+Alonzo Church \cite{church1985calculi},
+Emil Post \cite{Post1943},
+Stephen Kleene \cite{kleeneMetamathematics},
+Raymond Smullyan \cite{Smullyan1969}
+e outros também desenvolveram
+definições independentes.
+Curiosamente, todas essas definições foram demonstradas
+serem equivalentes, e foi conjecturado que tudo que é
+computável, na noção intuitiva que era usada anteriormente,
+era computável por uma máquina de Turing
+\cite{churchTuring}. Com isso, dizemos que esses modelos
+de computação são capazes de \textit{computação universal}.
+\index{computação universal}
+
+\input{preliminares/completude}
+\input{preliminares/rule_110_spec}
+\input{preliminares/rule_110_py}

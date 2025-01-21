@@ -27,16 +27,16 @@ class _Builtin_Func:
             return Result(None, err)
         return Result(obj, None)
 
-# implementamos métodos passando um escopo onde o "self"
-# é uma variável respresentando a instancia do objeto
+# implementamos metodos passando um escopo onde o "self"
+# eh uma variavel respresentando a instancia do objeto
 class _User_Function:
     def __init__(self, name, formal_args, block, parent_scope):
         self.name = name
         self.block = block
         # lista dos nomes dos argumentos
         self.formal_args = formal_args
-        # toda função captura o ambiente que ela ta inserida,
-        # ie, é uma closure
+        # toda funcao captura o ambiente que ela ta inserida,
+        # ie, eh uma closure
         self.parent_scope = parent_scope
 
     def call(self, ctx, args):
@@ -67,7 +67,7 @@ class _User_Object_Template:
         self.node = node
         self.methods = methods
     # preenche self.value usando a logica do __init__ criado pelo usuario
-    # emite um erro se não existir __init__
+    # emite um erro se nao existir __init__
     def eval_init(self, ctx, args):
         instance = _User_Object_Instance(self)
         obj = _Py_Object(objkind.USER_OBJECT, instance, True)
@@ -89,10 +89,10 @@ class _User_Object_Template:
 
 class _User_Object_Instance:
     def __init__(self, template):
-        # dicionario de tipo str->_Py_Object que contém as propriedades
+        # dicionario de tipo str->_Py_Object que contem as propriedades
         # do objeto
         self.properties = {}
-        # dicionario de tipo str->_User_Function que contém os métodos
+        # dicionario de tipo str->_User_Function que contem os metodos
         # do objeto
         self.methods = template.methods
         self.class_name = template.name
@@ -157,8 +157,8 @@ class _Py_Object:
 
 class _Scope:
     def __init__(self, parent, kind):
-        # é necessário diferenciar entre escopos de função
-        # e escopos de módulo
+        # eh necessario diferenciar entre escopos de funcao
+        # e escopos de modulo
         self.kind = kind
         self.parent = parent
         self.name = ""
@@ -171,7 +171,7 @@ class _Scope:
             return True
         else:
             return False
-    # set_scope_name é usado nos modulos
+    # set_scope_name eh usado nos modulos
     def set_scope_name(self, name):
         self.name = name
     def contains(self, name):
@@ -192,16 +192,16 @@ class _Scope:
             curr = curr.parent
         return out
 
-# _Call_Node define um nó numa pilha de chamada
+# _Call_Node define um no numa pilha de chamada
 class _Call_Node:
     def __init__(self, parent, scope):
-        # toda função tem um escopo, podendo variar apenas localmente (no escopo de função)
-        # ou globalmente (no escopo de módulo), por isso é necessário que esse campo esteja
-        # presente e aponte para o escopo onde a função foi declarada
+        # toda funcao tem um escopo, podendo variar apenas localmente (no escopo de funcao)
+        # ou globalmente (no escopo de modulo), por isso eh necessario que esse campo esteja
+        # presente e aponte para o escopo onde a funcao foi declarada
         self.curr_scope = scope
-        # preenchido por qualquer função chamada dentro desse contexto
+        # preenchido por qualquer funcao chamada dentro desse contexto
         self.return_obj = None
-        # ao retornar de uma função, é necessário ter acesso ao contexto pai
+        # ao retornar de uma funcao, eh necessario ter acesso ao contexto pai
         self.parent = parent
 
     def __str__(self):
@@ -951,8 +951,8 @@ def _eval_lhs_field_access(ctx, lhs):
 
 # O lado esquerdo deve obedecer uma semantica mais estrita que o direito,
 # por necessitar ter um objeto atribuivel.
-# A função eval_lhs retorna um _Py_Object, esse, por ser passado por
-# referência, pode ser atribuido futuramente.
+# A funcao eval_lhs retorna um _Py_Object, esse, por ser passado por
+# referencia, pode ser atribuido futuramente.
 def _eval_lhs(ctx, lhs):
     if lhs.kind == nodekind.TERMINAL and lhs.value.kind == lexkind.ID:
         name = lhs.value.text
@@ -1259,7 +1259,8 @@ def _eval_module(ctx, name):
 
 def evaluate(builtins, module_map, entry_name, verbose):
     if not (entry_name in module_map):
-        return Error("", "entry module not in module map", None)
+        msg = "entry module not in module map"
+        return Error("", msg, None)
 
     node = _Call_Node(None, builtins)
     ctx = _Context(module_map, node, builtins)

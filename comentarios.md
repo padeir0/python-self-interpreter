@@ -13,7 +13,7 @@ tests = [
 Porém a sintaxe de Python é sensivel a espaços e novas linhas.
 Para permitir literais e chamadas de função em multiplas linhas,
 Python faz com que o Lexer pare de emitir tokens de nova-linha (NL)
-dentro de delimitadores [1](https://docs.python.org/3/reference/lexical_analysis.html#:~:text=There%20is%20no%20NEWLINE%20token%20between%20implicit%20continuation%20lines.).
+dentro de delimitadores [1](https://docs.python.org/3/reference/lexical_analysis.html#implicit-line-joining).
 Isso é uma gambiarra. 
 
 Na gramatica, é possível permitir que novas linhas sejam ignoradas
@@ -31,7 +31,7 @@ um subconjunto próprio das strings aceitas pela gramática tradicional do Pytho
 # Linhas em branco
 
 No interpretador usual de Python,
-linhas em branco também não emitem tokens de nova-linha [2](https://docs.python.org/3/reference/lexical_analysis.html#:~:text=A%20logical%20line%20that%20contains%20only%20spaces%2C%20tabs%2C%20formfeeds%20and%20possibly%20a%20comment%2C%20is%20ignored%20(i.e.%2C%20no%20NEWLINE%20token%20is%20generated).),
+linhas em branco também não emitem tokens de nova-linha [2](https://docs.python.org/3/reference/lexical_analysis.html#blank-lines),
 isso é outra gambiarra. É possivel resolver isso
 direto na gramática da linguagem:
 
@@ -48,7 +48,7 @@ de Python original.
 # Tabs
 
 Por causa das complexidades de verificar as regras de identação quando
-tabs estão envolvidas [3](https://docs.python.org/3/reference/lexical_analysis.html#:~:text=Indentation%20is%20rejected%20as%20inconsistent%20if%20a%20source%20file%20mixes%20tabs%20and%20spaces%20in%20a%20way%20that%20makes%20the%20meaning%20dependent%20on%20the%20worth%20of%20a%20tab%20in%20spaces),
+tabs estão envolvidas [3](https://docs.python.org/3/library/exceptions.html#TabError),
 elas são completamente proibidas no código fonte.
 
 Se fosse permitido o uso de tabs sem levar em conta a identação própria,
@@ -59,7 +59,7 @@ interpretador padrão de Python.
 # Sintaxe PEG original vs PEG extendida
 
 A sintaxe padrão de Python é especificada usando uma gramática de PEG
-normal, que não entende espaço semantico [4](https://docs.python.org/3/reference/lexical_analysis.html#:~:text=INDENT%20and%20DEDENT%20tokens).
+normal, que não entende espaço semantico [4](https://docs.python.org/3/reference/lexical_analysis.html#indentation).
 Recentemente, alguns avanços na teoria de parsers dão idéias de como
 extender a gramática PEG para lidar com identação.
 
@@ -91,7 +91,7 @@ não execute nenhum código antes dessa verificação.
 # Indentação correta
 
 Não é necessário _exatamente_ 4 espaços para indentar código
-em python [5](https://docs.python.org/3/reference/lexical_analysis.html#:~:text=correctly%20(though%20confusingly)%20indented).
+em python [5](https://docs.python.org/3/reference/lexical_analysis.html#indentation).
 Só é necessário que os statements em um bloco
 sejam corretamente justificados (tenham a mesma indentação),
 e que, quando ditado pela gramática, o primeiro statement
@@ -143,7 +143,7 @@ mesmo no caso que o lado esquerdo da atribuição tenha multiplas expressões.
 Para implementar os `for` loops em python, é necessário o uso dos métodos `__iter__` e
 `__next__`, e o segundo se comunica por meio de exceções. Por consequência, pro interpretador usar
 os métodos `__next__` do próprio CPython, ele precisa de entender exceções
-[6](https://docs.python.org/3/library/stdtypes.html#iterator.__iter__:~:text=If%20there%20are%20no%20further%20items%2C%20raise%20the%20StopIteration%20exception.)
+[6](https://docs.python.org/3/library/stdtypes.html#iterator.__next__)
 , e elas não serão implementadas.
 
 # String Escapes

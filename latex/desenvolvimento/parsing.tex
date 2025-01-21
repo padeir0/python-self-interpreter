@@ -1,0 +1,131 @@
+\section{Parsing}
+
+O parser também tem seu estado interno, e depende
+do lexer para receber os lexemas. A técnica de parsing
+que usamos se chama parser por descida recursiva
+(\textit{Recursive Descent Parser}), e se encaixa
+perfeitamente com a gramática que utilizamos.
+\index{\textit{Recursive Descent Parser}}
+\index{parser}
+
+\begin{lstlisting}
+class _Parser:
+    def __init__(self, lexer):
+        self.lexer = lexer
+        self.indent = 0 # numero de espacos
+        self.is_tracking = False
+        lexer.next() # precisamos popular lexer.word
+\end{lstlisting}
+
+Observe, por exemplo, o procedimento que implementa
+a produção \verb|Return|:
+
+\begin{lstlisting}
+# Return = 'return' Expr.
+def _return(parser):
+    parser.track("_return")
+    res = parser.expect(lexkind.RETURN, "'return' keyword")
+    if res.failed():
+        return res
+
+    res = parser.expect_prod(_expr, "expression")
+    if res.failed():
+        return res
+    expr = res.value
+
+    n = Node(None, nodekind.RETURN)
+    n.leaves = [expr]
+    return Result(n, None)
+\end{lstlisting}
+
+É uma tradução quase direta da gramática:
+primeiramente esperamos a palavra-chave \verb|return|
+(linhas 4-6) e
+depois esperamos uma expressão \verb|Expr|
+(linhas 8-10). O resultado é colocado
+em um nó do tipo \verb|nodekind.RETURN|, e é retornado
+dentro de um \verb|Result|.
+
+O método \verb|expect| é simples, mas facilita muito a
+implementação de um parser, replicamos este a seguir:
+
+\begin{lstlisting}
+def expect(self, kind, str):
+    if self.word_is(kind):
+        return self.consume()
+    err = self.error("expected " + str)
+    return Result(None, err)
+\end{lstlisting}
+
+Além disso, temos alguns utilitários que implementam padrões
+comuns na gramática da linguagem, por exemplo,
+para implementar listas de qualquer outra produção,
+utilizamos:
+\index{listas multi-linhas}
+
+\begin{lstlisting}
+# implementa:
+#    Production {[CommaNL] Production} [CommaNL].
+def repeat_comma_list(self, production):
+    res = production(self)
+    if res.failed() or res.value == None:
+        return res
+    list = [res.value]
+    while self.word_is(lexkind.COMMA):
+        _comma_nl(self)
+        res = production(self)
+        if res.failed():
+            return res
+        if res.value == None:
+            return Result(list, None)
+        list += [res.value]
+    return Result(list, None)
+\end{lstlisting}
+
+\index{indentação}
+Os métodos que são responsáveis pela indentação
+são \verb|indent_prod| e \verb|same_indent|, que
+implementam, respectivamente, o operador de indentação
+e o operador de justificação.
+O \verb|indent_prod| aumenta o campo \verb|Parser.indent|
+antes de executar o procedimento da produção, e retorna
+ao campo para o estado anterior quando a produção
+terminar de executar:
+
+\begin{lstlisting}
+def indent_prod(self, base_indent, production):
+    prev_indent = self.indent
+    self.indent = base_indent
+
+    if not (self.curr_indent() > self.indent):
+        err = self.error("invalid indentation")
+        return Result(None, err)
+
+    res = production(self)
+    if res.failed():
+        return res
+    out = res.value
+    self.indent = prev_indent
+    return Result(out, None)
+\end{lstlisting}
+
+É possível ver o uso desse método em procedimentos
+como \verb|_while|, \verb|_if| e etc. Sempre
+que o operador de indentação for utilizado na gramática.
+\index{operador de indentação}
+
+Utilizamos o procedimento \verb|same_indent| no
+procedimento \verb|_block| e \verb|_methods|:
+
+\begin{lstlisting}
+def _block(parser):
+    parser.track("_block")
+    statements = []
+
+    base_indent = parser.curr_indent()
+    while parser.same_indent(base_indent):
+        ...
+\end{lstlisting}
+
+Juntos, esses utilitários permitem que a sintaxe sensível
+a indentação de Python seja implementada com facilidade.

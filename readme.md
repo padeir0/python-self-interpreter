@@ -84,7 +84,7 @@ Assign_Op = '=' | '+=' | '-=' | '*=' | '/=' | '%='.
 
 bool = 'True' | 'False'.
 num = /[0-9]+/.
-str = /" insideString* "/.
+str = '"' insideString* '"'.
 insideString = ascii | escapes.
 escapes = '\\n' | '\\"'
 id = /[a-zA-Z_][a-zA-Z0-9_]*/.

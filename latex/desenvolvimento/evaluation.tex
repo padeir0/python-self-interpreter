@@ -1,0 +1,219 @@
+\section{Evaluation}
+
+A função \verb|evaluate| implementa um interpretador em
+árvore, que percorre recursivamente a árvore sintática
+e executa o código (por isso, na literatura, esses
+são referenciados como \textit{Tree-walking interpreters}).
+\index{\textit{Tree-walking interpreters}}
+\index{interpretador em árvore}
+
+\begin{lstlisting}
+def evaluate(builtins, module_map, entry_name, verbose):
+    if not (entry_name in module_map):
+        msg = "entry module not in module map"
+        return Error("", msg, None)
+
+    node = _Call_Node(None, builtins)
+    ctx = _Context(module_map, node, builtins)
+    if verbose:
+        print("\nevaluate\n")
+        ctx.toggle_verbose()
+    res = _eval_module(ctx, entry_name)
+    return res.error
+\end{lstlisting}
+
+\index{funções embutidas}
+Os argumentos de \verb|evaluate| são os seguintes:
+\verb|builtins| é o escopo de funções embutidas;
+\verb|module_map| é um dicionário que contém todos os
+arquivos de python em um diretório, é chaveado pelo nome
+do arquivo, enquanto o valor é o conteúdo do arquivo;
+\verb|entry_name| é o nome do arquivo que será executado
+primeiro; por fim, \verb|verbose| é um boleano que serve
+apenas para fim de debug.
+
+\index{CPython}
+O argumento \verb|builtins| é de suma importância para o
+funcionamento do projeto: sem ele, não conseguiríamos passar
+as funções do \texttt{CPython} para dentro do interpretador.
+Ela permite que possamos aproveitar a infraestrutura do
+\texttt{CPython} para implementar os objetos embutidos.
+
+Já o argumento \verb|module_map| é o que nos permite
+implementar um sistema de módulos com facilidade, veja
+que nosso interpretador não permite acessar módulos
+em pastas diferentes, isso é intencional, e fornece
+uma implementação muito mais simples.
+\index{sistema de módulos}
+
+A estrutura do arquivo \verb|evaluator.py| é separada em duas
+grandes partes: os objetos e os procedimentos com prefixo
+\verb|_eval_|.
+
+Existe um procedimento com prefixo \verb|_eval_| para a
+maioria das constantes no arquivo \verb|nodekind.py|.
+Desse jeito, separamos a implementação de cada operação
+de Python em partes atômicas, permitindo que essas partes
+sejam combinadas de acordo com a semântica da linguagem.
+
+Por exemplo, o procedimento \verb|_eval_block| executa,
+para cada nó filho, o procedimento \verb|_eval_sttm|,
+que executa cada \textit{statement} do bloco. Isso ocorre
+na ordem usual de cima para baixo.
+\index{statement}
+
+\begin{lstlisting}
+def _eval_block(ctx, node):
+    if ctx.verbose:
+        print("_eval_block")
+    i = 0
+    while i < len(node.leaves) and not ctx.is_returning:
+        sttm = node.leaves[i]
+        err = _eval_sttm(ctx, sttm)
+        if err != None:
+            return err
+        i += 1
+    return None
+\end{lstlisting}
+
+\noindent Veja também que a execução de cada \textit{statement}
+pode ser parada caso um \verb|return| seja executado. Para isso,
+utilizamos a propriedade \verb|ctx.is_returning|.
+
+\index{evaluator}
+O \verb|_Context| é o objeto mais importante do evaluator,
+este implementa a pilha de chamadas (\verb|curr_call_node|),
+e contém informações globais do programa em execução
+(\verb|source_map|, \verb|builtin_scope|, etc). Este objeto
+é passado como o argumento \verb|ctx| para todos os
+procedimentos com prefixo \verb|_eval_|.
+
+\begin{lstlisting}
+class _Context:
+    def __init__(self, source_map, call_node, builtin_scope):
+        self.builtin_scope = builtin_scope
+        self.source_map = source_map
+        self.curr_call_node = call_node
+        self.evaluated_mods = {}
+        self.is_returning = False
+        self.verbose = False
+    ...
+\end{lstlisting}
+
+\index{pilha de chamada} \index{lista encadeada}
+O objeto \verb|_Call_Node| implementa a pilha de chamada
+a partir de uma lista encadeada. A propriedade \verb|parent|
+sempre aponta para o nó anterior da pilha, e é igual a
+\verb|None| no primeiro arquivo a ser executado.
+
+\begin{lstlisting}
+class _Call_Node:
+    def __init__(self, parent, scope):
+        self.curr_scope = scope
+        self.return_obj = None
+        self.parent = parent
+\end{lstlisting}
+
+\noindent Veja que toda função tem um escopo, podendo
+variar apenas localmente (no escopo de função),
+ou globalmente (no escopo de módulo). Por isso, é necessário
+que \verb|curr_scope| esteja presente em cada nó da pilha
+de chamada, permitindo que a função capture o ambiente
+no qual foi declarada. Nesse sentido, todas as funções
+no interpretador são \textit{closures}.
+\index{\textit{closures}}
+
+Por fim, a propriedade \verb|return_obj| é populada
+pelas funções que foram chamadas dentro desse contexto,
+é dessa forma que podemos retornar valores de uma função
+para outra, mesmo depois que o nó na pilha de chamada seja
+eliminado.
+
+\index{escopo} \index{scope}
+O \verb|_Scope| por sua vez, é outra lista encadeada,
+onde cada nó aponta para o nó anterior \verb|parent|,
+exceto no caso do escopo \verb|builtin|, que aponta para
+\verb|None|.
+Dessa vez, essa lista carrega um dicionário de símbolos
+declarados naquele escopo, bem como uma descrição do tipo
+de escopo.
+
+\begin{lstlisting}
+class _Scope:
+    def __init__(self, parent, kind):
+        self.kind = kind
+        self.parent = parent
+        self.name = ""
+        self.dict = {}
+\end{lstlisting}
+
+O motivo dessa estrutura fica óbvio quando olhamos para o
+método responsável por achar um símbolo a partir do escopo
+atual:
+
+\begin{lstlisting}
+def retrieve(self, name):
+    if name in self.dict:
+        return Result(self.dict[name], None)
+    elif self.parent != None:
+        return self.parent.retrieve(name)
+    else:
+        return Result(None, True)
+\end{lstlisting}
+
+\noindent De maneira simplificada: procuramos o nome no
+escopo atual: se o nome existir, retornamos o objeto
+imediatamente; caso contrário, se o nome não for achado,
+procuramos no escopo parente.
+Fazemos isso até chegarmos em um escopo cujo
+parente é \verb|None| (o escopo \verb|builtin|), nesse caso,
+se o nome não existir nesse escopo, retornamos um
+\verb|Result| cuja propriedade \verb|error| é não nula,
+apenas para notificar que o símbolo não foi achado.
+
+O objeto em questão, que é retornado pelo procedimento
+anterior, é do tipo \verb|_Py_Object|. Essa classe encapsula
+os objetos do \texttt{CPython} e permite que o interpretador
+entenda os tipos do objeto, sem recorrer ao uso da classe
+\verb|type|.
+
+\begin{lstlisting}
+class _Py_Object:
+    def __init__(self, kind, value, mutable):
+        self.kind = kind
+        self.value = value
+        self.mutable = mutable
+\end{lstlisting}
+
+\noindent A propriedade \verb|kind| nos permite saber o tipo
+do objeto em questão, enquanto \verb|value| contém o próprio
+objeto.
+
+Nem todos os objetos são diretamente "importados" de
+\texttt{CPython}, por exemplo, os objetos que representam
+funções são da classe \verb|_User_Function| (isto é,
+a propriedade \verb|value| do \verb|_Py_Object| contém
+um objeto do tipo \verb|_User_Function|). Esse objeto
+permite que as funções sejam executadas utilizando a
+árvore sintática.
+
+\begin{lstlisting}
+class _User_Function:
+    def __init__(self, name, formal_args, block, parent_scope):
+        self.name = name
+        self.block = block
+        self.formal_args = formal_args
+        self.parent_scope = parent_scope
+\end{lstlisting}
+
+\noindent Das propriedades, temos:
+\verb|formal_args| que é uma lista de identificadores
+para os argumentos; \verb|block| que contém a árvore  
+sintática do corpo da função; \verb|parent_scope| que é  
+o escopo capturado no momento em que a função foi declarada;
+e por fim \verb|name|, que é o nome da função.
+
+\index{interpretador em árvore}
+Todos esses objetos, e outros de menor importância,
+são utilizados dentro dos procedimentos com prefixo
+\verb|_eval_| para implementar o interpretador em árvore.

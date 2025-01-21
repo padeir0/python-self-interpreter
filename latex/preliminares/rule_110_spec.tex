@@ -1,0 +1,71 @@
+\section{\texttt{Rule 110}}
+
+A \texttt{Rule 110} é uma regra simples de automato celular
+unidimensional pertencente à classe dos
+\textit{elementary cellular automata}.
+Esses automatos consistem em uma fita infinita de células
+dispostas em uma linha, onde cada célula pode estar em um de
+dois estados: ativo (\texttt{1}) ou inativo (\texttt{0}).
+O estado de cada célula em um instante \( t+1 \) é determinado
+pelo estado dela e de suas duas vizinhas em \( t \), conforme
+uma regra fixa.
+
+Formalmente, a evolução da Rule 110 é definida pela função de
+transição local que mapeia o estado de uma célula e seus
+vizinhos para o estado seguinte. Definindo:
+\begin{equation*}
+A = \{(1,1,0), (1,0,1),(0,1,1), (0,1,0), (0,0,1)\}
+\end{equation*}
+
+\index{função de transição}
+\noindent Podemos descrever essa função de transição como:
+
+\[
+f(a, b, c) =
+\begin{cases}
+1, & \text{se } (a, b, c) \in A, \\
+0, & \text{caso contrário}.
+\end{cases}
+\]
+
+Aqui, \( a \), \( b \), \( c \) representam o estado da célula
+da esquerda, a célula atual e a célula da direita,
+respectivamente.
+
+Essa regra pode ser representada compactamente na seguinte
+tabela de transição, onde as entradas representam
+\( (a, b, c) \), e as saídas o estado resultante:
+
+\[
+\begin{array}{c|c}
+\text{Configuração } (a, b, c) & \text{Próximo estado} \\
+\hline
+111 & 0 \\
+110 & 1 \\
+101 & 1 \\
+100 & 0 \\
+011 & 1 \\
+010 & 1 \\
+001 & 1 \\
+000 & 0 \\
+\end{array}
+\]
+
+Começando com uma única célula ativa, e representando
+uma geração por linha, podemos visualizar a evolução
+do autômato da seguinte forma:
+\index{autômato}
+
+\begin{verbatim}
+            O 
+           OO 
+          OOO 
+         OO O 
+        OOOOO 
+       OO   O 
+      OOO  OO 
+     OO O OOO
+\end{verbatim}
+
+Onde espaços representam células inativas e \verb|O|
+representam células ativas.

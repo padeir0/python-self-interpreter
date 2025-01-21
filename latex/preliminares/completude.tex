@@ -1,0 +1,35 @@
+\section{Completude de Turing}
+
+Dizemos que dois modelos de computação são equivalentes
+quando é possível simular um dentro do outro. Quando
+algum modelo é equivalente a máquinas de Turing, dizemos
+que esse sistema possui completude de Turing, ou que
+esse sistema é \textit{Turing Completo} (TC).
+\index{Turing Completo} \index{TC}
+
+Por exemplo,
+em \textit{Universality in Elementary Cellular Automata}
+\cite{Cook2004},
+o autor mostra que é possível simular uma máquina
+de Turing usando os sistemas de
+Emil Post, e usando um sistema chamado \textit{Cyclic Tag System} é possível simular os sistemas de Emil Post,
+e usando um sistema chamado \textit{Glider System}
+é possível simular o \textit{Cyclic Tag System},
+e por fim, ele mostra que é possível usar \texttt{Rule 110}
+para simular o \textit{Glider System}. Com isso,
+simulando \texttt{Rule 110} em uma máquina de Turing,
+é possível mostrar que todos esses modelos de computação
+são equivalentes.
+
+\index{\texttt{Rule 110}}
+A utilidade de saber que \texttt{Rule 110} é TC, é que esse sistema é incrivelmente
+fácil de ser simulado, abrindo portas para verificar
+que outros modelos de computação também são TC.
+Esse é o primeiro objetivo deste trabalho.
+
+Outra coisa interessante é que todo sistema TC é capaz de
+simular a si mesmo. A recíproca não é verdade, existem
+sistemas capazes de simular a si mesmo que não são TC.
+A segunda parte desse trabalho (a parte mais
+trabalhosa) tem como objetivo simular um subconjunto de Python
+dentro desse mesmo subconjunto.

@@ -1,0 +1,22 @@
+\chapter{Conclusão}
+
+Apesar de carecer de aplicações práticas, simular
+Python dentro de Python nos permite explorar a rica
+teoria sobre interpretadores e máquinas abstratas, e,
+apesar de ser óbvio que Python era capaz de computação
+universal (e, portanto, capaz de se simular), a implementação,
+bem como esse documento, servem como aparelho didático para
+introdução da teoria de linguagens de programação.
+
+O interpretador está longe de ser perfeito, e existem várias
+melhorias que podem ser feitas. Por exemplo, é possível
+utilizar a classe \verb|type| e o operador \verb|is|,
+para remover a necessidade da classe \verb|_Py_Object|;
+além disso, a implementação de exceções não é tão difícil,
+e pode melhorar o tratamento de erros no interpretador,
+especialmente no parser; por fim, nada impede a implementação
+de outras construções linguísticas,
+como o \verb|switch| de \texttt{C},
+o \verb|export| de \texttt{Modula 2},
+o \verb!|>! de \texttt{OCaml},
+etc.

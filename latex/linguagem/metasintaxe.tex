@@ -1,0 +1,128 @@
+\section{Meta-Sintaxe}
+
+\index{\textit{Wirth Syntax Notation}}
+Vamos usar a \textit{Wirth Syntax Notation}
+definida em \cite{wirth1977WSN}, com extensões
+modernas, para descrever o subconjunto de Python que
+utilizaremos. Aqui, definiremos apenas as modificações,
+e é sugerido ao leitor que leia o artigo
+original do Wirth previamente.
+
+A modificação mais simples é que ao invés de usarmos
+aspas duplas para descrever terminais, utilizamos aspas
+simples, isto é, usamos \verb|'| no lugar de \verb|"|.
+Como no exemplo a seguir:
+
+\begin{lstlisting}
+Return = 'return' Expr.
+\end{lstlisting}
+
+\index{expressões regulares}
+Uma segunda modificação conveniente nos permite
+escrever expressões regulares, desde que essas estejam
+envolvidas por barras \verb|/|. Por exemplo, os
+identificadores são descritos da mesma forma que
+na linguagem \texttt{C}, e podemos escrever somente:
+\index{\texttt{C}}
+
+\begin{lstlisting}
+id = /[a-zA-Z_][a-zA-Z0-9_]*/.
+\end{lstlisting}
+
+\noindent A sintaxe e semântica
+das expressões regulares é a mesma definida
+pela biblioteca \texttt{PCRE} \cite{pcre_syntax}
+\index{\texttt{PCRE}}
+
+\index{micro-sintaxe}
+Por convenção, escrevemos produções de micro-sintaxe
+com a primeira letra minúscula. Veremos mais para frente
+que essas acabam sendo reconhecidas pelo \textit{Lexer}.
+\index{\textit{lexer}}
+
+\index{indentação}
+A extensão mais importante é a que nos permite lidar com
+a sintaxe sensível a indentação de Python.
+Essa é inspirada pelo trabalho dos programadores 
+da biblioteca \texttt{Parsec} \cite{adams2014indentation}.
+Essa modificação é complexa, mas poderosa, então
+acredito ser necessária uma definição própria.
+\index{\texttt{Parsec}}
+
+\begin{Def}
+\index{nível de indentação}
+Definimos o \textbf{nível de indentação de uma produção}
+como um número natural
+representando a coluna do primeiro caractere significativo
+a ser aceito por essa produção.
+\end{Def}
+
+No exemplo anterior, o nível de indentação de \verb|Return|
+é a coluna do caractere \verb|r| presente na palavra-chave.
+Note que o nível de indentação não é fixo,
+cada vez que \verb|Return| aceitar uma string do código fonte,
+a produção pode adotar um novo valor de indentação,
+mas tal valor vai sempre ser herdado do caractere \verb|r|.
+
+Precisamos ainda definir dois operadores. Esses operadores
+são usados em conjunto para descrever produções como:
+
+\begin{lstlisting}
+While = 'while' Expr ':' NL >Block.
+\end{lstlisting}
+
+O leitor deve estar familiarizado
+com a sintaxe de Python, e deve
+já ter uma intuição sobre o que o operador \verb|>| faz.
+Ele serve justamente para dizermos "esse bloco tem que ser
+indentado". Definimos isso da seguinte forma:
+
+\begin{Def}
+\index{operador de indentação}
+Se \(A\) é uma produção definida a partir de \(B\),
+de forma que \(B\) é 
+precedida pelo \textbf{operador de indentação} \verb|>|, 
+então \(B\) deve possuir
+um nível de indentação \emph{estritamente}
+maior que o nível de indetação de \(A\).
+\end{Def}
+
+No caso da produção \verb|While|, o \verb|Bloco|
+deve ser indentado
+com respeito à palavra-chave \verb|'while'|, isto é,
+deve ter nível de indentação estritamente maior
+que \verb|While|.
+
+Por fim, para definir \verb|Block|, precisamos do operador
+\verb|:|.
+
+\begin{lstlisting}
+Block = { :Statement NL }.
+\end{lstlisting}
+
+\noindent Essa produção captura a ideia intuitiva que temos
+sobre a sintaxe de Python: as instruções de um bloco
+devem estar no mesmo nível de indentação.
+
+\begin{Def}
+\index{operador de justificação}
+Se \(A\) é uma produção definida a partir de \(B\),
+de forma que \(B\) é 
+precedida pelo \textbf{operador de justificação} \verb|:|, 
+então \(B\) deve possuir
+um nível de indentação \emph{exatamente igual}
+ao nível de indentação de \(A\).
+\end{Def}
+
+Note que no caso de \verb|Block|, o nível de indentação
+do bloco é o nível do primeiro \verb|Statement|.
+
+Veja que não é necessário \emph{exatamente} 4 espaços para
+indentar código em Python \cite{indentation}. Só é necessário
+que os \textit{statements}
+em um bloco sejam corretamente justificados, e que, quando
+ditado pela gramática, o primeiro \textit{statement}
+do bloco tenha uma
+indentação estritamente maior.
+Isso quer dizer que nossa gramática permite
+que o código use apenas um espaço como indentação.

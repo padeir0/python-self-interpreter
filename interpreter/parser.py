@@ -23,7 +23,7 @@ def parse(modname, string, track):
 class _Parser:
     def __init__(self, lexer):
         self.lexer = lexer
-        self.indent = 0 # numero de espaços
+        self.indent = 0 # numero de espacos
         self.is_tracking = False
         lexer.next() # precisamos popular lexer.word
 
@@ -102,7 +102,7 @@ class _Parser:
             last = res.value
         return Result(list, None)
 
-    # implements:
+    # implementa:
     #    Production {[CommaNL] Production} [CommaNL].
     def repeat_comma_list(self, production):
         res = production(self)
@@ -153,7 +153,7 @@ class _Parser:
         self.indent = prev_indent
         return Result(out, None)
 
-# Block = { [Statement] NL }.
+# Block = { :Statement NL }.
 # Statement = While  | If    | Atrib_Expr
 #           | Return | Class | Func
 #           | Import | FromImport | Pass.

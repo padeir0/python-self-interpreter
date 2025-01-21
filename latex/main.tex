@@ -1,0 +1,126 @@
+\documentclass[11pt]{book}
+\usepackage[
+    a5paper,
+    portrait,
+    tmargin=2.2cm,
+    bmargin=2.5cm,
+    headheight=15pt,
+    inner=1.5cm, outer=2cm % a encadernação que eu faço tem margens bem comportadas
+]{geometry}
+
+\usepackage{graphicx}
+\usepackage{titlesec}
+\usepackage[brazilian]{babel}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{imakeidx}
+\usepackage{fancyhdr}
+\usepackage[utf8]{inputenc}
+\usepackage{csquotes}
+\usepackage[hidelinks]{hyperref}
+\usepackage{cleveref}
+\usepackage[section]{placeins}
+
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\scriptsize, % Fonte pequena e monoespaçada
+  keywordstyle=\bfseries,% Palavras-chave em negrito
+  showstringspaces=false,% Não mostrar espaços em strings
+  numbers=left,          % Números de linha à esquerda
+  numberstyle=\tiny,     % Fonte dos números de linha
+  tabsize=4,             % Tamanho do tab
+  breaklines=true,       % Quebrar linhas longas automaticamente
+}
+
+\usepackage[
+style=alphabetic,
+sorting=ynt,
+backend=biber]{biblatex}
+\addbibresource{biblio.bib}
+
+\pagestyle{fancy}
+
+\makeindex[title=Índice, columns=2, columnsep=0pt, program=xindy]
+
+\renewcommand{\lstlistingname}{}
+\renewcommand{\thechapter}{\arabic{chapter}}
+\renewcommand{\thesection}{\arabic{section}}
+\renewcommand{\cleardoublepage}{\clearpage} % may god have mercy for this sin
+\renewcommand{\chaptermark}[1]{\markboth{\thechapter.\ #1}{}}
+\renewcommand{\sectionmark}[1]{\markright{\thesection.\ #1}}
+\renewcommand{\headrule}{
+\vspace{-9pt}
+\hrulefill
+\raisebox{0pt}
+{\quad\(\therefore\)\quad}%
+\hrulefill}
+\renewcommand{\thefigure}{\arabic{figure}}
+\renewcommand{\thetable}{\arabic{table}}
+
+\renewcommand{\contentsname}{Sumário}
+\renewcommand*{\proofname}{Dem}
+\theoremstyle{definition}
+\newtheorem{Teo}{Teorema}
+\newtheorem{Def}{Definição}
+\renewcommand{\theDef}{\Roman{Def}}
+\renewcommand{\theTeo}{\Roman{Teo}}
+
+\crefname{Def}{}{}
+\Crefname{Def}{}{}
+\crefname{Teo}{}{}
+\Crefname{Teo}{}{}
+
+
+\makeatletter
+  \@removefromreset{section}{chapter}
+  \@removefromreset{figure}{chapter}
+  \@removefromreset{table}{chapter}
+\makeatother
+
+
+
+\titleformat{\chapter}[display]
+{\normalfont\Large\filcenter\sffamily}
+{\titlerule[2pt]\vspace{1.5pt}\titlerule[1pt]\vspace{1pc}\LARGE\thechapter}
+{1pc}
+{\titlerule\vspace{1pc}\Large}
+
+\titleformat{\section}[block]
+{\normalfont \filcenter \bfseries}
+{\thesection .}{1pc}{}
+
+\titlespacing{\chapter}{0pc}{-50pt}{40pt}
+\titlespacing{\section}{0pc}{*4}{*1.5}
+
+\title{\textbf{Auto-interpretador de Python}}
+\author{Artur Iure Vianna Fernandes\\
+\small (Matemática)}
+\date{\today}
+
+\begin{document}
+\emergencystretch 3em
+\fancyhead[LE,RO]{\thepage}
+\fancyhead[RE]{\rightmark}
+\fancyhead[LO]{\leftmark}
+\fancyfoot[C]{}
+
+\maketitle
+
+\input{resumo}
+\tableofcontents
+
+\input{preliminares/chapter}
+\input{linguagem/chapter}
+\input{desenvolvimento/chapter}
+\input{conclusao}
+
+\printbibliography[heading=bibintoc]
+
+\small
+\printindex
+
+\end{document}

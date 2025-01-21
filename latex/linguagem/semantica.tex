@@ -1,0 +1,53 @@
+\section{Semântica}
+
+Apesar de ser um subconjunto de Python, algumas coisas
+são restritas e implementadas de forma diferente. Para
+não haver confusões, descrevemos elas aqui.
+
+Para implementar os \verb|for| loops em Python, é necessário o
+uso dos métodos \verb|__iter__| e \verb|__next__|, e o segundo
+se comunica por meio de exceções. Por consequência, para o
+interpretador usar os métodos \verb|__next__| do próprio
+CPython, ele precisa entender exceções \cite{iterator_next}, e
+elas não serão implementadas.
+
+Não temos tuplas em Spy pois são redundantes: usamos listas
+em seu lugar.
+
+Para tratar os erros no parser, existem várias opções.
+Idealmente, em Python, usaríamos \textit{Exceptions}, o que
+limparia muito a implementação, entretanto, não
+vamos implementar \textit{Exceptions}, portanto,
+não podemos as usar.
+
+Ao invés disso, tomamos a estratégia de Rust:
+
+\begin{lstlisting}[language=Python]
+def _while(parser):
+    res = parser.expect(lexkind.WHILE, "while keyword")
+    if res.failed():
+        return res
+\end{lstlisting}
+
+O lado esquerdo de uma atribuição deve conter apenas expressões atribuíveis.
+Nesse sentido, essa validação só pode ocorrer em tempo de \textit{runtime}.
+Para isso, uma função olha a expressão do lado esquerdo e
+tentar achar o objeto, e ela mesma retorna esse erro, caso
+o objeto não seja atribuível.
+
+A definição de um \emph{objeto atribuível} em
+no subconjunto se dá pelo seguinte:
+\begin{itemize}
+    \item Se \verb|<e>| é um objeto mutável,
+    então \verb|<e>| é atribuível (\verb|a = 1|).
+    \item Sendo \verb|<e>| uma expressão que retorna um
+    objeto mutável:
+    \begin{itemize}
+        \item Uma expressão composta com indexação (\verb|<e>[1] = 1|) é atribuível.
+        \item Uma expressão composta com acesso a uma propriedade mutável \verb|<e>.prop = 1| é atribuível.
+    \end{itemize}
+\end{itemize}
+
+Uma propriedade é \emph{mutável} se não é o nome de algum
+método. Todos os símbolos importados de outros módulos
+são imutáveis.
