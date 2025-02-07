@@ -72,7 +72,7 @@ def parse_file(file_path):
         return None
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            modname = file[:len(file)-3] # remove ".py"
+            modname = file_path[:len(file_path)-3] # remove ".py"
             file_contents = f.read()
             res = parse(modname, file_contents, False)
             if res.failed():
@@ -88,7 +88,7 @@ def lex_file(file_path):
         return None
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            modname = file[:len(file)-3] # remove ".py"
+            modname = file_path[:len(file_path)-3] # remove ".py"
             file_contents = f.read()
             tks = lex(modname, file_contents)
             for tk in tks:
